@@ -174,7 +174,7 @@ def start(args):
 
 def close(args):
     load_config()
-    call("adb shell am force-stop \"%s\"" % pkg)
+    adb("shell am force-stop \"%s\"" % pkg)
 
 def adb_list(cmds, all=None):
     if not all: all = args.all
@@ -289,7 +289,12 @@ def deploy(args):
     for file in files:
         upload(file)
 
-
+"""
+requires the following env vars:
+export TF_LIST="Distribution list name"
+export TF_TOKEN="API TOKEN"
+export TF_TEAM_TOKEN="TEAM TOKEN"
+"""
 def upload(file, list=None):
     if not list: list = os.environ["TF_LIST"]
     subprocess.call(["curl", "http://testflightapp.com/api/builds.json", "-#",
@@ -309,46 +314,46 @@ def no_sub_parser(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ADB Helper.")
-    parser.add_argument("--all", "-a", action="store_true")
+    parser.add_argument("--all", "-a", action="store_true", help="Runs the commands on all connected devices. Only for some commands that use adb (marked with *).")
     subparsers = parser.add_subparsers()
 
     parser_config = subparsers.add_parser('config', help='Create a config file on this folder.')
     parser_config.set_defaults(func=create_config)
 
-    parser_flavor = subparsers.add_parser('flavor', aliases=['f'], help='Flavor of the app.')
+    parser_flavor = subparsers.add_parser('flavor', aliases=['f'], help='Flavor of the app. No arguments to output the current one; a name change to that flavor; --add to add a new flavor to the .adb file; --env to print an export string for the enviroment variables for the current flavor.')
     parser_flavor.add_argument('--add', action='store_true')
     parser_flavor.add_argument('--env', action='store_true')
     parser_flavor.add_argument('name', nargs='?')
     parser_flavor.set_defaults(func=flavor)
 
-    parser_clear = subparsers.add_parser('clear', aliases=['c'], help='Clears the app data.')
+    parser_clear = subparsers.add_parser('clear', aliases=['c'], help='Clears the app data. *')
     parser_clear.set_defaults(func=clear)
 
-    parser_clear_start = subparsers.add_parser('clear-start', aliases=['cs'], help='Clears the app data and starts it.')
+    parser_clear_start = subparsers.add_parser('clear-start', aliases=['cs'], help='Clears the app data and restarts it. *')
     parser_clear_start.set_defaults(func=clear_start)
 
     parser_debug = subparsers.add_parser('debug', aliases=['d'], help='Starts the app in Debug mode.')
     parser_debug.set_defaults(func=debug)
 
-    parser_start = subparsers.add_parser('start', aliases=['s'], help='Starts the app.')
+    parser_start = subparsers.add_parser('start', aliases=['s'], help='Starts the app. *')
     parser_start.set_defaults(func=start)
 
-    parser_close = subparsers.add_parser('close', aliases=['fc'], help='Force closes the app.')
+    parser_close = subparsers.add_parser('close', aliases=['fc'], help='Force closes the app. Only works on some devices. *')
     parser_close.set_defaults(func=close)
 
-    parser_install = subparsers.add_parser('install', aliases=['i'], help='installs the app.')
+    parser_install = subparsers.add_parser('install', aliases=['i'], help='Installs the app. *')
     parser_install.set_defaults(func=install)
 
-    parser_uninstall = subparsers.add_parser('uninstall', aliases=['u'], help='uninstalls the app.')
+    parser_uninstall = subparsers.add_parser('uninstall', aliases=['u'], help='Uninstalls the app. *')
     parser_uninstall.set_defaults(func=uninstall)
 
-    parser_install_start = subparsers.add_parser('install-start', aliases=['is'], help='installs and starts the app.')
+    parser_install_start = subparsers.add_parser('install-start', aliases=['is'], help='Installs and starts the app. *')
     parser_install_start.set_defaults(func=install_start)
 
     parser_pulldb = subparsers.add_parser('pulldb', aliases=['p'], help='Pulls a db from a device.')
     parser_pulldb.set_defaults(func=pulldb)
 
-    parser_deploy = subparsers.add_parser('deploy', help="Deploy!")
+    parser_deploy = subparsers.add_parser('deploy', help="Compiles as release, asks for release notes and uploads to TestFlight. Accepts a list of flavors, otherwise compiles all.")
     parser_deploy.add_argument("flavors", nargs="*")
     parser_deploy.set_defaults(func=deploy)
 

@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+# Project shortcut - goes to project dir, displays the active project flavor and sets the enviroment vars for that flavor
+alias cdpr="cd ~/Path/To/Project && AndroidShell.py f && eval \`AndroidShell.py f --env\`"
+
+# Change flavor and set corresponding enviroment vars
+function AndroidFlavor() {
+    AndroidShell.py f $1 && $(AndroidShell.py f --env)
+}
 
 # Presents a list of connected devices, renamed according to the list and asks the user to select one.
 # If there's only one, that one will be automatically selected.
@@ -7,11 +14,7 @@
 # Because this uses export, this script should be on you .bash_profile or some other file that gets sourced.
 function setandroid {
     adb devices | sed '${/^$/d;}' | awk 'BEGIN {
-            array["410013c...	device"] = "Tab 3";
-			array["4df1c17...	device"] = "Galaxy S3"; 
-			array["S566085...	device"] = "Galaxy GIO"; 
-			array["373049A...	device"] = "Galaxy S";
-			array["78F5FD0...	device"] = "Huawei";
+            array["410013c...	device"] = "Device XPTO";
             x=0 }{ if ($0 in array) a = array[$0]; else a = $0;
             if (x == 0) print a ; else print x "  " a; x++ }'
     n=`adb devices | wc -l | awk {'print $1'}`
