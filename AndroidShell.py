@@ -210,7 +210,7 @@ def adb(cmd, all=None):
 
 
 def install(args):
-    load_config()
+    load_config(args)
     s = "find %s -name *.apk" % (os.path.dirname(path))
     x = subprocess.check_output(s.split(" ")).strip().decode()
     adb("install -r %s" % x)
@@ -229,24 +229,28 @@ def uninstall(args):
 
 def pulldb(args):
     load_config(args)
+    try:
+        dbn=args.name
+    except:
+        dbn = config["dbname"]
 
     call("pkill Base")
     call("rm ~/" + dbn)
 
     # trying direct pull
-    success = call("adb pull /data/user/0/%s/databases/%s" % (pkg, dbn)) == 0
+    success = call("adb pull /data/user/0/%s/databases/%s" % (pkg, dbn)) == 0 and os.path.exists(dbn)
 
     if not success:
         # trying copy as root
         call("adb shell rm /sdcard/" + dbn)
         call("adb shell su -c cp /data/user/0/%s/databases/%s /sdcard/" % (pkg, dbn))
-        success = call("adb pull /sdcard/" + dbn)
+        success = call("adb pull /sdcard/" + dbn) == 0
 
     if not success:
         # trying run-as
         call("adb shell rm /sdcard/" + dbn)
-        if call("adb shell run-as \"%s\" cp databases/%s /sdcard/" % (pkg, dbn)):
-            success = call("adb pull /sdcard/" + dbn) == 0
+        call("adb shell run-as \"%s\" cp databases/%s /sdcard/" % (pkg, dbn))
+        success = call("adb pull /sdcard/" + dbn) == 0
 
     if success:
         call(["open", dbn])
@@ -358,6 +362,7 @@ if __name__ == "__main__":
     parser_install_start.set_defaults(func=install_start)
 
     parser_pulldb = subparsers.add_parser('pulldb', aliases=['p'], help='Pulls a db from a device.')
+    parser_pulldb.add_argument("--name", "-n", help="File name of the database to pull.")
     parser_pulldb.set_defaults(func=pulldb)
 
     parser_deploy = subparsers.add_parser('deploy', help="Compiles as release, asks for release notes and uploads to TestFlight. Accepts a list of flavors, otherwise compiles all.")
