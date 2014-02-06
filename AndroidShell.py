@@ -49,7 +49,7 @@ def read_dot_adb(f):
             print("No flavors!")
 
 
-def load_config():
+def load_config(args = None):
     global config
     global pkg
     global path
@@ -58,7 +58,10 @@ def load_config():
         print(".adb not found.")
         exit(1)
     config = read_dot_adb(f)
-    pkg = config["package"]
+    try:
+        pkg = args.package
+    except:
+        pkg = config["package"]
     path = f.name
 
 
@@ -85,7 +88,7 @@ Run the following on bash:  $(<this-script> f --env)
 and it will export the env vars for the current flavor
 """
 def get_flavor_env(args):
-    load_config()
+    load_config(args)
     print(";".join(["export %s='%s'"%(k,v) for k,v in config["env"].items()]))
 
 def flavor(args):
@@ -153,27 +156,27 @@ def add_flavor(args):
 
 
 def clear(args):
-    load_config()
+    load_config(args)
     adb("shell pm clear "+ config["package"])
 
 def clear_start(args):
-    load_config()
+    load_config(args)
     adb_list(["shell pm clear "+ config["package"],"shell am start -n \"%s/%s\" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (pkg, config["activity"])])
 
 
 def debug(args):
-    load_config()
+    load_config(args)
     call("adb shell am start -D -n \"%s/%s\" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
         pkg, config["activity"]))
 
 
 def start(args):
-    load_config()
+    load_config(args)
     adb("shell am start -n \"%s/%s\" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (pkg, config["activity"]))
 
 
 def close(args):
-    load_config()
+    load_config(args)
     adb("shell am force-stop \"%s\"" % pkg)
 
 def adb_list(cmds, all=None):
@@ -218,14 +221,13 @@ def install_start(args):
 
 
 def uninstall(args):
-    load_config()
+    load_config(args)
     adb(all=args.all)
     adb("uninstall %s" % pkg)
 
 
 def pulldb(args):
-    load_config()
-    dbn = config["dbname"]
+    load_config(args)
 
     call("pkill Base")
     call("rm ~/" + dbn)
@@ -269,7 +271,7 @@ def request_user(prompt, options=None, default=None):
 
 
 def deploy(args):
-    load_config()
+    load_config(args)
     gradle_cmd = "%s/gradlew assemble%sRelease" % (
         os.path.dirname(path), "Release assemble".join([x.title() for x in args.flavors]))
 
@@ -315,6 +317,7 @@ def no_sub_parser(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ADB Helper.")
     parser.add_argument("--all", "-a", action="store_true", help="Runs the commands on all connected devices. Only for some commands that use adb (marked with *).")
+    parser.add_argument("--package", "-p", help="Specify the package name to use.")
     subparsers = parser.add_subparsers()
 
     parser_config = subparsers.add_parser('config', help='Create a config file on this folder.')
