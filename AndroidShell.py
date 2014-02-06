@@ -6,6 +6,7 @@ import argparse
 import subprocess
 import threading
 import glob
+import IPython
 
 filename = ".adb"
 config = None
@@ -313,6 +314,9 @@ def no_sub_parser(args):
     f = find_dot_adb()
     call("s " + f.name)
 
+def interpret(args):
+    import IPython
+    IPython.embed()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ADB Helper.")
@@ -359,6 +363,9 @@ if __name__ == "__main__":
     parser_deploy = subparsers.add_parser('deploy', help="Compiles as release, asks for release notes and uploads to TestFlight. Accepts a list of flavors, otherwise compiles all.")
     parser_deploy.add_argument("flavors", nargs="*")
     parser_deploy.set_defaults(func=deploy)
+
+    parser_repl = subparsers.add_parser("repl", help="Starts a shell.")
+    parser_repl.set_defaults(func=interpret)
 
     args = parser.parse_args()
     # print(args)
