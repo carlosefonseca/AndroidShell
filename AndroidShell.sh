@@ -70,3 +70,12 @@ function adball {
     adb devices | grep -v List | grep device | perl -p -e 's/(\w+)\s.*/\1/' | xargs -I § adb -s § "$@"
 }
 
+# screencapture current device
+function adbscreen {
+    adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > screen.png && open screen.png
+}
+
+# screencapture all devices
+function adbscreenall {
+    adb devices | grep -v List | grep device | perl -p -e 's/(\w+)\s.*/\1/' | xargs -I § sh -c "adb -s $1 shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > 'screen_$1.png' && open 'screen_$1.png'" -- §
+}
