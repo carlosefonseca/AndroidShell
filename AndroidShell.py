@@ -8,14 +8,29 @@ import threading
 import glob
 import IPython
 import BewareAppManager
+import requests
 
 filename = ".adb"
+full_config = None
 config = None
 path = None  # path for config file
 dirname = None  # "dirname" for config file
 pkg = None
 args = None
 release_notes_file = ".releasenotes"
+
+
+class Color:
+    PURPLE = '\033[95m'
+    CYAN = '\033[96m'
+    DARKCYAN = '\033[36m'
+    BLUE = '\033[94m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
 
 
 def find_dot_adb(curr=os.getcwd()):
@@ -37,7 +52,9 @@ def find_dot_adb(curr=os.getcwd()):
 
 
 def read_dot_adb(f):
+    global full_config
     j = json.load(f)
+    full_config = j
     if ("_f" in j):
         try:
             return j[j["_f"]]
@@ -99,9 +116,10 @@ and it will export the env vars for the current flavor
 def get_flavor_env(args):
     load_config(args)
     # print(" && ".join(["export %s=\"%s\""%(k,v) for k,v in config["env"].items()]))
-    [
-    print("export %s=%s" % (k, v))
-    for k, v in config["env"].items()]
+    if "env" in config:
+        [
+            print("export %s=%s" % (k, v))
+            for k, v in config["env"].items()]
 
 
 def flavor(args):
@@ -197,6 +215,13 @@ def close(args):
     adb("shell am force-stop \"%s\"" % pkg)
 
 
+def restart(args):
+    load_config(args)
+    adb("shell am force-stop \"%s\"" % pkg)
+    adb("shell am start -n \"%s/%s\" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
+        pkg, config["activity"]))
+
+
 def adb_list(cmds, all=None):
     if not all: all = args.all
 
@@ -231,7 +256,7 @@ def adb(cmd, all=None):
 def install(args):
     load_config(args)
     s = "find %s -path */build/apk/*.apk" % dirname
-    x = subprocess.check_output(s.split(" ")).strip().decode()
+    x = subprocess.check_output(s.split(" ")).strip().decode().split("\n")[0]
     adb("install -r %s" % x)
 
 
@@ -304,11 +329,21 @@ def request_user(prompt, options=None, default=None):
 def deploy(args):
     load_config(args)
 
+    gitout = gitstatus()
+    if len(gitout):
+        print("⚠️  Git: " + gitout.strip())
+        if BewareAppManager.user_request("Continue? [Y/n] ", "yn", "y") == "n":
+            return
+
     if not args.no_compile:
         if len(args.flavors) == 0: print("Building ALL flavors.")
 
-        gradle_cmd = "%s/gradlew assemble%sRelease" % (
-            dirname, "Release assemble".join([x.title() for x in args.flavors]))
+        if ("debug_only" in config and config["debug_only"]):
+            gradle_cmd = "%s/gradlew assemble%sDebug" % (
+                dirname, "Debug assemble".join([x.title() for x in args.flavors]))
+        else:
+            gradle_cmd = "%s/gradlew assemble%sRelease" % (
+                dirname, "Release assemble".join([x.title() for x in args.flavors]))
 
         gradle_thread = threading.Thread(target=call, args=(gradle_cmd,))
         gradle_thread.daemon = True
@@ -319,78 +354,60 @@ def deploy(args):
     if not args.no_compile:
         gradle_thread.join()
 
-    gitout = gitstatus()
-    if len(gitout):
-        print("⚠️  Git: " + gitout)
-
     if len(args.flavors) == 0: args.flavors = "*"
 
-    files_list = [glob.glob("*/build/apk/*-%s-release.apk" % f) for f in args.flavors]
-    files = [item for _sublist in files_list for item in _sublist]
+    flavored_files = {}
+    for flavor in args.flavors:
+        fconfig = full_config[flavor]
 
-    if len(files) == 0:
-        files_list = [glob.glob("*/build/apk/*%s-debug-unaligned.apk" % f) for f in args.flavors]
-        files = [item for _sublist in files_list for item in _sublist]
+        if ("debug_only" in fconfig and fconfig["debug_only"]):
+            flavored_files[flavor] = glob.glob("*/build/apk/*-%s-debug*.apk" % flavor)
+        else:
+            flavored_files[flavor] = glob.glob("*/build/apk/*-%s-release.apk" % flavor)
+            if len(flavored_files[flavor]) == 0:
+                flavored_files[flavor] = glob.glob("*/build/apk/*-%s-release-unsigned.apk" % flavor)
 
-        print("No release apk found.")
-        if len(files) > 0:
-            print("Found the following debug apk%s:" % ("'s" if len(files) > 1 else ""))
-            for item in files: print("- " + os.path.basename(item))
-            if BewareAppManager.user_request("Upload %s? [Y/n] " % ("them" if len(files) > 1 else "it"), "yn",
-                                             "y") == "n":
-                files = None
+    release_notes = open(os.path.join(dirname, release_notes_file)).read()
+    something_was_uploaded = False
+    for fn, ff in flavored_files.items():
+        if len(ff) > 1:
+            print("??? " + fn + " " + ff)
+            return
+        elif len(ff) == 1:
+            print()
+            if not uploadBAM3(ff[0], fn, release_notes, args.dry_run):
+                print(Color.RED + "ERROR" + Color.END)
+                return
+            else:
+                something_was_uploaded = True
 
-    elif len(files) > 1:
-        print("Files to upload:")
-        [
-        print("- " + os.path.basename(item))
-        for item in files]
+    if something_was_uploaded and "slack" in config and config["slack"]:
+        print()
+        drytxt = ("[dry-run]" if args.dry_run else "")
+        print(Color.BOLD + "Posting release notes to Slack " + drytxt + Color.END)
+        release_notes = "\n".join(">" + l for l in release_notes.splitlines())
+        BewareAppManager.postslack(config["slack"], release_notes, args.dry_run)
 
+
+def uploadBAM3(f, flavor, release_notes=None, dry_run=False):
+    if not release_notes: release_notes = open(os.path.join(dirname, release_notes_file)).read()
+    config = full_config[flavor]
+    print("Uploading " + Color.YELLOW + f + Color.END + " for flavor " + Color.GREEN + flavor + Color.END)
+    mail = config["mailto"] if "mailto" in config else None
+    name = config["bam_name"] if "bam_name" in config else None
+    slack = config["slack"] if "slack" in config else None
+    return BewareAppManager.deploy("dev", build_file=f, dry_run=dry_run,
+                                   release_notes=release_notes,
+                                   send_mail=mail, post_slack=slack, bam_name=name)
+
+
+def pull_sdcard_files(args):
+    load_config(args)
+    # call('adb shell ls /sdcard/Android/data/%s/files | tr \'\\r\' \'\\0\' | xargs -I § adb pull "/sdcard/Android/data/%s/files/§"' % (pkg, pkg))
+    path = "/sdcard/Android/data/%s/files" % pkg
+    files = [x.decode() for x in subprocess.check_output(["adb", "shell", "ls", path]).split()]
     for f in files:
-        print("Uploading now: %s" % os.path.basename(f))
-        upload(f)
-
-
-def upload(file, list=None):
-    if os.path.exists(os.path.join(dirname, ".bam2")):
-        uploadBAM2(file)
-    elif os.path.exists(os.path.join(dirname, ".bam")):
-        uploadBAM(file)
-    else:
-        uploadTF(file, list)
-
-
-"""
-requires the following env vars:
-export TF_LIST="Distribution list name"
-export TF_TOKEN="API TOKEN"
-export TF_TEAM_TOKEN="TEAM TOKEN"
-"""
-
-
-def uploadTF(file, list=None):
-    if not list: list = os.environ["TF_LIST"]
-    subprocess.call(["curl", "http://testflightapp.com/api/builds.json", "-#",
-                     "-F", "file=@" + file,
-                     "-F", "notes=@" + release_notes_file,
-                     "-F", "api_token=" + os.environ["TF_TOKEN"],
-                     "-F", "team_token=" + os.environ["TF_TEAM_TOKEN"],
-                     "-F", "notify=True",
-                     "-F", "replace=True",
-                     "-F", "distribution_lists=" + list], stdout=subprocess.PIPE)
-
-
-def uploadBAM(f):
-    if BewareAppManager.deploy("dev", build_file=f, dry_run=False,
-                               release_notes=open(os.path.join(dirname, release_notes_file)).read()):
-        BewareAppManager.mail(channel="dev", dry_run=False)
-        BewareAppManager.slackbot(channel="dev")
-
-
-def uploadBAM2(f):
-    BewareAppManager.deploy("dev", build_file=f, dry_run=True,
-                            release_notes=open(os.path.join(dirname, release_notes_file)).read(),
-                            send_mail=config["mailto"], post_slack=config["slack"])
+        call('adb pull %s/%s' % (path, f))
 
 
 def gitstatus():
@@ -403,7 +420,16 @@ def no_sub_parser(args):
     call("s " + f.name)
 
 
+def move_run(args):
+    load_config(args)
+    name = config["bam_name"] if "bam_name" else pck.replace("pt.beware.", "")
+    BewareAppManager.move(from_channel=args.from_channel, to_channel=args.to_channel, version=args.version,
+                          identifier=name)
+
+
 def interpret(args):
+    load_config(args)
+    print("pkg: " + pkg)
     import IPython
 
     IPython.embed()
@@ -414,6 +440,7 @@ if __name__ == "__main__":
     parser.add_argument("--all", "-a", action="store_true",
                         help="Runs the commands on all connected devices. Only for some commands that use adb (marked with *).")
     parser.add_argument("--package", "-p", help="Specify the package name to use.")
+    parser.add_argument('--dry-run', action='store_true', help='Don\'t make changes.')
     subparsers = parser.add_subparsers()
 
     parser_config = subparsers.add_parser('config', help='Create a config file on this folder.')
@@ -443,6 +470,9 @@ if __name__ == "__main__":
                                          help='Force closes the app. Only works on some devices. *')
     parser_close.set_defaults(func=close)
 
+    parser_restart = subparsers.add_parser('restart', aliases=['r'], help="Force closes and starts the app.")
+    parser_restart.set_defaults(func=restart)
+
     parser_install = subparsers.add_parser('install', aliases=['i'], help='Installs the app. *')
     parser_install.set_defaults(func=install)
 
@@ -452,9 +482,21 @@ if __name__ == "__main__":
     parser_install_start = subparsers.add_parser('install-start', aliases=['is'], help='Installs and starts the app. *')
     parser_install_start.set_defaults(func=install_start)
 
+    # create the parser for the "move" command
+    parser_move = subparsers.add_parser("move", help="Move a version from one channel to another.")
+    parser_move.add_argument("from_channel")
+    parser_move.add_argument("to_channel")
+    parser_move.add_argument("version", nargs="?", default=None)
+    parser_move.add_argument("-identifier", nargs="?", default=None)
+    parser_move.set_defaults(func=move_run)
+
     parser_pulldb = subparsers.add_parser('pulldb', aliases=['p'], help='Pulls a db from a device.')
     parser_pulldb.add_argument("--name", "-n", help="File name of the database to pull.")
     parser_pulldb.set_defaults(func=pulldb)
+
+    parser_pullsd = subparsers.add_parser('pullsd', aliases=['psd'],
+                                          help='Pulls all files from the app\'s data folder on the sdcard.')
+    parser_pullsd.set_defaults(func=pull_sdcard_files)
 
     parser_deploy = subparsers.add_parser('deploy',
                                           help="Compiles as release, asks for release notes and uploads to TestFlight. Accepts a list of flavors, otherwise compiles all.")
@@ -471,5 +513,3 @@ if __name__ == "__main__":
         args.func(args)
     else:
         no_sub_parser(args)
-
-

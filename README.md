@@ -3,6 +3,10 @@ AndroidShell
 
 A set of very useful commands for doing all things Android Development related.
 
+Notes:
+
+* This is highly tailored for MY needs, but go ahead and adapt it.
+* There are references to an AppManager which is a home-made service that isn't open source yet. It deploys APK's to a server. Replace that with what you have or remove the deploy stuff altoguether.
 
 Stuff
 -----
@@ -15,7 +19,7 @@ AndroidShell.py contains stuff mostly tied to projects.
 Project setup
 -------------
 
-We use projects with different flavors and 
+We use projects with different flavors and this helps.
 
 Create a .adb file, like the one on the repo, on your project dir and specify your stuff for each flavor. Currently there's package name, first activity name, database name and some environment variables.
 
@@ -32,14 +36,16 @@ Here's the list of commands for the python file:
     debug (d)           Starts the app in Debug mode.
     start (s)           Starts the app. *
     close (fc)          Force closes the app. Only works on some devices. *
+    restart (r)         Force closes and starts the app.
     install (i)         Installs the app. *
     uninstall (u)       Uninstalls the app. *
     install-start (is)  Installs and starts the app. *
     pulldb (p)          Pulls a db from a device.
-    deploy              Compiles as release, asks for release notes and uploads to TestFlight.
-   						Accepts a list of flavors, otherwise compiles all.
+    pullsd (psd)        Pulls all files from the app's data folder on the
+                        sdcard.
 
-Option before the command:
+Options before the command:
 
 	--all, -a           Runs the commands on all connected devices.
 						Only for some commands that use adb (marked with *).
+    --dry-run           Don't make changes (mostly on the deploy).
