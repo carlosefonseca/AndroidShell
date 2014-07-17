@@ -13,6 +13,7 @@ import requests
 filename = ".adb"
 full_config = None
 config = None
+flavor = None
 path = None  # path for config file
 dirname = None  # "dirname" for config file
 pkg = None
@@ -53,11 +54,13 @@ def find_dot_adb(curr=os.getcwd()):
 
 def read_dot_adb(f):
     global full_config
+    global flavor
     j = json.load(f)
     full_config = j
     if ("_f" in j):
         try:
-            return j[j["_f"]]
+            flavor = j["_f"]
+            return j[flavor]
         except:
             print("Flavor '%s' doesn't exist!" % j["_f"])
     else:
@@ -139,7 +142,7 @@ def flavor(args):
                 print("No flavor set. Choose from these: %s" % ", ".join(j.keys()))
                 return
         # print("Current flavor: %s  on file: %s" % (j["_f"], f.name))
-        print("Current flavor: %s" % j["_f"])
+        print("Current flavor: %s   [ %s ]" % (j["_f"], ", ".join([k for k in j.keys() if not k.startswith("_") and k != j["_f"]])))
         return
 
     if flavor in j:
@@ -254,8 +257,10 @@ def adb(cmd, all=None):
 
 
 def install(args):
+    # This one returns the most recent one but requires GNU Find (brew install findutils)
+    # gfind . -path "*/build/outputs/apk/*granada*.apk" -printf '%T+ %p\n' | sort -r | head -n 1 | cut -f 2 -d ' '
     load_config(args)
-    s = "find %s -path */build/apk/*.apk" % dirname
+    s = "find %s -path */build/outputs/apk/*%s*.apk" % (dirname, flavor)
     x = subprocess.check_output(s.split(" ")).strip().decode().split("\n")[0]
     adb("install -r %s" % x)
 
@@ -274,14 +279,15 @@ def pulldb(args):
     load_config(args)
 
     dbn = args.name if args.name else config["dbname"]
+    dbnf = dbn if dbn.endswith(".db") else dbn+".db"
 
     call("pkill Base")
     call("rm " + dbn)
 
     # trying direct pull
-    success = call("adb pull /data/user/0/%s/databases/%s" % (pkg, dbn)) == 0 and os.path.exists(dbn)
+    success = call("adb pull /data/user/0/%s/databases/%s %s" % (pkg, dbn, dbnf)) == 0 and os.path.exists(dbnf)
     if success:
-        call("adb pull /data/user/0/%s/databases/%s-journal" % (pkg, dbn)) == 0 and os.path.exists(dbn)
+        call("adb pull /data/user/0/%s/databases/%s-journal %s-journal" % (pkg, dbn, dbnf)) == 0 and os.path.exists(dbnf)
 
     else:
         # trying copy as root
@@ -289,22 +295,22 @@ def pulldb(args):
         call("adb shell rm /sdcard/%s-journal" % dbn)
         call("adb shell su -c cp /data/user/0/%s/databases/%s /sdcard/" % (pkg, dbn))
         call("adb shell su -c cp /data/user/0/%s/databases/%s-journal /sdcard/" % (pkg, dbn))
-        success = call("adb pull /sdcard/" + dbn) == 0
+        success = call("adb pull /sdcard/%s %s" % (dbn, dbnf)) == 0
         if success:
-            call("adb pull /sdcard/%s-journal" % dbn)
+            call("adb pull /sdcard/%s-journal %s-journal" % (dbn, dbnf))
 
         else:
             # trying run-as
             call("adb shell rm /sdcard/" + dbn)
             call("adb shell run-as \"%s\" cp databases/%s /sdcard/" % (pkg, dbn))
             call("adb shell run-as \"%s\" cp databases/%s-journal /sdcard/" % (pkg, dbn))
-            success = call("adb pull /sdcard/" + dbn) == 0
+            success = call("adb pull /sdcard/%s %s" % (dbn, dbnf)) == 0
             if success:
-                call("adb pull /sdcard/%s-journal" % dbn)
+                call("adb pull /sdcard/%s-journal %s-journal" % (dbn, dbnf))
 
     if success:
-        call("sqlite3 %s vacuum" % dbn)
-        call(["open", dbn])
+        call("sqlite3 %s vacuum" % dbnf)
+        call(["open", dbnf])
     else:
         print("Failed to pull file :(")
         exit(1)
@@ -325,7 +331,6 @@ def request_user(prompt, options=None, default=None):
             t = default
     return t
 
-
 def deploy(args):
     load_config(args)
 
@@ -334,6 +339,9 @@ def deploy(args):
         print("⚠️  Git: " + gitout.strip())
         if BewareAppManager.user_request("Continue? [Y/n] ", "yn", "y") == "n":
             return
+    
+    from multiprocessing.pool import ThreadPool
+    pool = ThreadPool(processes=1)
 
     if not args.no_compile:
         if len(args.flavors) == 0: print("Building ALL flavors.")
@@ -345,14 +353,14 @@ def deploy(args):
             gradle_cmd = "%s/gradlew assemble%sRelease" % (
                 dirname, "Release assemble".join([x.title() for x in args.flavors]))
 
-        gradle_thread = threading.Thread(target=call, args=(gradle_cmd,))
-        gradle_thread.daemon = True
-        gradle_thread.start()
+        async_result = pool.apply_async(call, (gradle_cmd,))
 
     call("s -w " + release_notes_file)
 
     if not args.no_compile:
-        gradle_thread.join()
+        if async_result.get() != 0:
+            print("Build failed.")
+            return 1
 
     if len(args.flavors) == 0: args.flavors = "*"
 
@@ -361,27 +369,48 @@ def deploy(args):
         fconfig = full_config[flavor]
 
         if ("debug_only" in fconfig and fconfig["debug_only"]):
-            flavored_files[flavor] = glob.glob("*/build/apk/*-%s-debug*.apk" % flavor)
+            flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
         else:
-            flavored_files[flavor] = glob.glob("*/build/apk/*-%s-release.apk" % flavor)
-            if len(flavored_files[flavor]) == 0:
-                flavored_files[flavor] = glob.glob("*/build/apk/*-%s-release-unsigned.apk" % flavor)
+
+            if len(glob.glob("*/build/outputs/apk")) > 0:
+                flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release.apk" % flavor)
+                if len(flavored_files[flavor]) == 0:
+                    flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
+            elif len(glob.glob("build/outputs/apk")) > 0:
+                flavored_files[flavor] = glob.glob("build/outputs/apk/*-%s-release.apk" % flavor)
+                if len(flavored_files[flavor]) == 0:
+                    flavored_files[flavor] = glob.glob("build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
 
     release_notes = open(os.path.join(dirname, release_notes_file)).read()
     something_was_uploaded = False
+    uploaded=[]
+    mails=None
     for fn, ff in flavored_files.items():
         if len(ff) > 1:
-            print("??? " + fn + " " + ff)
+            print("??? " + fn + " " + str(ff))
             return
         elif len(ff) == 1:
             print()
-            if not uploadBAM3(ff[0], fn, release_notes, args.dry_run):
+            success, bam_name = uploadBAM3(ff[0], fn, release_notes, args.dry_run)
+            if not success:
                 print(Color.RED + "ERROR" + Color.END)
                 return
             else:
+                mails=full_config[fn]["mailto"]
+                uploaded.append(bam_name)
                 something_was_uploaded = True
 
-    if something_was_uploaded and "slack" in config and config["slack"]:
+    if not something_was_uploaded:
+        print(Color.RED + "Nothing was uploaded!"+Color.END)
+
+
+    print()
+    if args.no_mail:
+        print(Color.BOLD + "Skipping emails" + Color.END)
+    else:
+        BewareAppManager.mail_multiple(to=mails, apps=uploaded, dry_run=args.dry_run)
+
+    if "slack" in config and config["slack"]:
         print()
         drytxt = ("[dry-run]" if args.dry_run else "")
         print(Color.BOLD + "Posting release notes to Slack " + drytxt + Color.END)
@@ -398,7 +427,8 @@ def uploadBAM3(f, flavor, release_notes=None, dry_run=False):
     slack = config["slack"] if "slack" in config else None
     return BewareAppManager.deploy("dev", build_file=f, dry_run=dry_run,
                                    release_notes=release_notes,
-                                   send_mail=mail, post_slack=slack, bam_name=name)
+                                   #send_mail=mail, 
+                                   post_slack=slack, bam_name=name)
 
 
 def pull_sdcard_files(args):
@@ -502,6 +532,7 @@ if __name__ == "__main__":
                                           help="Compiles as release, asks for release notes and uploads to TestFlight. Accepts a list of flavors, otherwise compiles all.")
     parser_deploy.add_argument("flavors", nargs="*")
     parser_deploy.add_argument("--no-compile", "-nc", action='store_true')
+    parser_deploy.add_argument("--no-mail", "-nm", action='store_true')
     parser_deploy.set_defaults(func=deploy)
 
     parser_repl = subparsers.add_parser("repl", help="Starts a shell.")
