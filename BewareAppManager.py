@@ -1,0 +1,1 @@
+../AppManager/heroku/bwappmanager/BewareAppManager.py

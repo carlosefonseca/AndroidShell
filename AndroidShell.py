@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# coding: utf-8
+
 import os
 import json
 import argparse
@@ -9,11 +11,14 @@ import glob
 import IPython
 import BewareAppManager
 import requests
+from GradleParser import GradleParser
+from copy import deepcopy
 
 filename = ".adb"
 full_config = None
 config = None
 flavor = None
+flavorname = None
 path = None  # path for config file
 dirname = None  # "dirname" for config file
 pkg = None
@@ -55,14 +60,16 @@ def find_dot_adb(curr=os.getcwd()):
 def read_dot_adb(f):
     global full_config
     global flavor
+    global flavorname
     j = json.load(f)
     full_config = j
     if ("_f" in j):
         try:
-            flavor = j["_f"]
-            return j[flavor]
+            flavorname = j["_f"]
+            flavor = get_flavor(j, flavorname)
+            return flavor
         except:
-            print("Flavor '%s' doesn't exist!" % j["_f"])
+            print("Flavor '%s' doesn't exist!" % flavorname)
     else:
         if (len(j) > 1):
             print("Select a flavor")
@@ -102,6 +109,7 @@ def load_all_config():
         print(".adb not found.")
         exit(1)
     j = json.load(f)
+    dirname = os.path.dirname(f.name)
     return f, j
 
 
@@ -119,11 +127,33 @@ and it will export the env vars for the current flavor
 def get_flavor_env(args):
     load_config(args)
     # print(" && ".join(["export %s=\"%s\""%(k,v) for k,v in config["env"].items()]))
-    if "env" in config:
-        [
-            print("export %s=%s" % (k, v))
-            for k, v in config["env"].items()]
+    # if "env" in config:
+    #     [
+    #         print("export %s=%s" % (k, v))
+    #         for k, v in config["env"].items()]
 
+
+def choose_gradle_flavor(flavors):
+    keys = list(flavors.keys())
+    keys.sort()
+    for i,v in enumerate(keys):
+        print(str(i).rjust(3)+" "+v)
+    r = request_user("Flavor: ")
+    new_flavor_name = None
+    if r.isnumeric() and int(r) < len(keys) and int(r) >= 0:
+        new_flavor_name = keys[int(r)]
+    else:
+        for k in keys:
+            if k.startswith(r):
+                new_flavor_name = k
+                break
+    if new_flavor_name is not None:
+        print()
+        print(new_flavor_name +"   >   "+ (",    ".join([k+": "+v for k,v in flavors[new_flavor_name].items()])))
+        return new_flavor_name, flavors[new_flavor_name]
+    else:
+        print("WRONG!")
+        return None
 
 def flavor(args):
     if args.add:
@@ -133,23 +163,61 @@ def flavor(args):
 
     f, j = load_all_config()
 
-    flavor = args.name
-    if not flavor:
-        if "_f" not in j:
-            if len(j.keys()) == 1:
-                set_flavor(f, list(j.keys())[0], j)
-            else:
-                print("No flavor set. Choose from these: %s" % ", ".join(j.keys()))
-                return
-        # print("Current flavor: %s  on file: %s" % (j["_f"], f.name))
-        print("Current flavor: %s   [ %s ]" % (j["_f"], ", ".join([k for k in j.keys() if not k.startswith("_") and k != j["_f"]])))
-        return
+    if "_gradle" in j:
+        flavors = GradleParser(folder=os.path.join(os.path.dirname(f.name), j["_gradle"])).flavors()
+        #print(flavors)
+        # for ff in flavors:
+            # print(j["_f"] +"   >   "+ (",    ".join([k+": "+v for k,v in ff.items()])))
 
-    if flavor in j:
-        set_flavor(f, flavor, j)
-        print("Selected flavor: " + flavor)
+        if args.dump:
+            print(json.dumps(flavors, indent=2))
+            return
+
+        flavor = args.name
+        if not flavor:
+            if args.x:
+                name, _ = choose_gradle_flavor(flavors)
+                set_flavor(f, name, j)
+                return
+
+            if "_f" not in j:
+                if len(flavors) == 1:
+                    set_flavor(f, flavors.keys()[0], j)
+                else:
+                    print("No flavor set. Choose from these:")
+                    name, _ = choose_gradle_flavor(flavors)
+                    set_flavor(f, name, j)
+                    return
+
+            flavor = flavors[j["_f"]]
+            print(j["_f"] +"   >   "+ (",    ".join([k+": "+v for k,v in flavor.items()])))
+
+        elif flavor in j:
+            set_flavor(f, flavor, j)
+            print("Selected flavor: " + flavor)
+        else:
+            print("Flavor '%s' doesn't exist!" % flavor)
+
+
     else:
-        print("Flavor '%s' doesn't exist!" % flavor)
+
+        flavor = args.name
+        if not flavor:
+            if "_f" not in j:
+                if len(j.keys()) == 1:
+                    set_flavor(f, list(j.keys())[0], j)
+                else:
+                    print("No flavor set. Choose from these: %s" % ", ".join(j.keys()))
+                    return
+            # print("Current flavor: %s  on file: %s" % (j["_f"], f.name))
+            print("Current flavor: %s   [ %s ]" % (j["_f"], ", ".join([k for k in j.keys() if not k.startswith("_") and k != j["_f"]])))
+            return
+
+        if flavor in j:
+            set_flavor(f, flavor, j)
+            print("Selected flavor: " + flavor)
+        else:
+            print("Flavor '%s' doesn't exist!" % flavor)
 
 
 def call(args):
@@ -165,6 +233,11 @@ def call(args):
     print(" $ " + " ".join(args))
     return subprocess.call(args)
 
+def edit(file, sublime=False):
+    if sublime:
+        call("subl -W "+file)
+    else:
+        call("open -e -n -W "+file)
 
 # def create_config_set(args)
 
@@ -197,31 +270,31 @@ def clear(args):
 def clear_start(args):
     load_config(args)
     adb_list(["shell pm clear " + config["package"],
-              "shell am start -n \"%s/%s\" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
+              "shell am start -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
                   pkg, config["activity"])])
 
 
 def debug(args):
     load_config(args)
-    call("adb shell am start -D -n \"%s/%s\" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
+    call("adb shell am start -D -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
         pkg, config["activity"]))
 
 
 def start(args):
     load_config(args)
-    adb("shell am start -n \"%s/%s\" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
+    adb("shell am start -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
         pkg, config["activity"]))
 
 
 def close(args):
     load_config(args)
-    adb("shell am force-stop \"%s\"" % pkg)
+    adb("shell am force-stop %s" % pkg)
 
 
 def restart(args):
     load_config(args)
-    adb("shell am force-stop \"%s\"" % pkg)
-    adb("shell am start -n \"%s/%s\" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
+    adb("shell am force-stop %s" % pkg)
+    adb("shell am start -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
         pkg, config["activity"]))
 
 
@@ -331,14 +404,29 @@ def request_user(prompt, options=None, default=None):
             t = default
     return t
 
+def get_flavor(json, name):
+    if "_default" in json:
+        f = deepcopy(json["_default"])
+        f.update(json[name])
+        return f
+    else:
+        return json[name]
+
 def deploy(args):
     load_config(args)
 
     gitout = gitstatus()
     if len(gitout):
         print("⚠️  Git: " + gitout.strip())
-        if BewareAppManager.user_request("Continue? [Y/n] ", "yn", "y") == "n":
+        r = BewareAppManager.user_request("Continue? [Yes]/No/Tower/Sourcetree ", "ynts", "y")
+        if r == "n":
             return
+        elif r == "t":
+            call(["gittower", "."])
+            BewareAppManager.user_request("Continue? ")
+        elif r == "s":
+            call(["stree"])
+            BewareAppManager.user_request("Continue? ")
     
     from multiprocessing.pool import ThreadPool
     pool = ThreadPool(processes=1)
@@ -355,48 +443,81 @@ def deploy(args):
 
         async_result = pool.apply_async(call, (gradle_cmd,))
 
-    call("s -w " + release_notes_file)
+    redmine_project = config["redmine"] if "redmine" in config else None
+
+    if redmine_project is not None:
+        r = BewareAppManager.user_request("Fetch Release Notes from Redmine? Y/[N] ", "yn", "n")
+        if r == "y":
+
+            import redmine_release_notes
+
+            with open(release_notes_file, "w+") as f:
+                f.write(redmine_release_notes.process(redmine_project))
+
+    edit(release_notes_file)
 
     if not args.no_compile:
         if async_result.get() != 0:
             print("Build failed.")
             return 1
 
-    if len(args.flavors) == 0: args.flavors = "*"
-
     flavored_files = {}
-    for flavor in args.flavors:
+    if "singleflavor" in full_config:
+        flavor = full_config["singleflavor"]
         fconfig = full_config[flavor]
 
         if ("debug_only" in fconfig and fconfig["debug_only"]):
-            flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
+            flavored_files[flavor] = glob.glob("*/build/outputs/apk/%s-debug.apk" % flavor)
         else:
 
             if len(glob.glob("*/build/outputs/apk")) > 0:
-                flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release.apk" % flavor)
+                flavored_files[flavor] = glob.glob("*/build/outputs/apk/%s-release.apk" % flavor)
                 if len(flavored_files[flavor]) == 0:
-                    flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
+                    flavored_files[flavor] = glob.glob("*/build/outputs/apk/%s-release-unsigned.apk" % flavor)
             elif len(glob.glob("build/outputs/apk")) > 0:
-                flavored_files[flavor] = glob.glob("build/outputs/apk/*-%s-release.apk" % flavor)
+                flavored_files[flavor] = glob.glob("build/outputs/apk/%s-release.apk" % flavor)
                 if len(flavored_files[flavor]) == 0:
-                    flavored_files[flavor] = glob.glob("build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
+                    flavored_files[flavor] = glob.glob("build/outputs/apk/%s-release-unsigned.apk" % flavor)
+    else:
+
+        if len(args.flavors) == 0: args.flavors = "*"
+
+        for flavor in args.flavors:
+            fconfig = full_config[flavor]
+
+            if ("debug_only" in fconfig and fconfig["debug_only"]):
+                flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
+            else:
+
+                if len(glob.glob("*/build/outputs/apk")) > 0:
+                    flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release.apk" % flavor)
+                    if len(flavored_files[flavor]) == 0:
+                        flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
+                elif len(glob.glob("build/outputs/apk")) > 0:
+                    flavored_files[flavor] = glob.glob("build/outputs/apk/*-%s-release.apk" % flavor)
+                    if len(flavored_files[flavor]) == 0:
+                        flavored_files[flavor] = glob.glob("build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
 
     release_notes = open(os.path.join(dirname, release_notes_file)).read()
     something_was_uploaded = False
     uploaded=[]
     mails=None
+    i = len(flavored_files)
     for fn, ff in flavored_files.items():
         if len(ff) > 1:
             print("??? " + fn + " " + str(ff))
             return
         elif len(ff) == 1:
+            i-=1
             print()
-            success, bam_name = uploadBAM3(ff[0], fn, release_notes, args.dry_run)
+            success, bam_name = uploadBAM3(ff[0], fn, release_notes, i == 0, args.dry_run)
             if not success:
                 print(Color.RED + "ERROR" + Color.END)
                 return
             else:
-                mails=full_config[fn]["mailto"]
+                flavr = get_flavor(full_config, fn)
+                if "mailto" in flavr:
+                    mails=flavr["mailto"]
                 uploaded.append(bam_name)
                 something_was_uploaded = True
 
@@ -405,22 +526,22 @@ def deploy(args):
 
 
     print()
-    if args.no_mail:
+    if args.no_mail or not mails:
         print(Color.BOLD + "Skipping emails" + Color.END)
     else:
         BewareAppManager.mail_multiple(to=mails, apps=uploaded, dry_run=args.dry_run)
 
-    if "slack" in config and config["slack"]:
-        print()
-        drytxt = ("[dry-run]" if args.dry_run else "")
-        print(Color.BOLD + "Posting release notes to Slack " + drytxt + Color.END)
-        release_notes = "\n".join(">" + l for l in release_notes.splitlines())
-        BewareAppManager.postslack(config["slack"], release_notes, args.dry_run)
+    # if "slack" in config and config["slack"]:
+    #     print()
+    #     drytxt = ("[dry-run]" if args.dry_run else "")
+    #     print(Color.BOLD + "Posting release notes to Slack " + drytxt + Color.END)
+    #     release_notes = "\n".join(">" + l for l in release_notes.splitlines())
+    #     BewareAppManager.postslack(config["slack"], release_notes, args.dry_run)
 
 
-def uploadBAM3(f, flavor, release_notes=None, dry_run=False):
+def uploadBAM3(f, flavor, release_notes=None, post_slack_release_notes=False, dry_run=False):
     if not release_notes: release_notes = open(os.path.join(dirname, release_notes_file)).read()
-    config = full_config[flavor]
+    config = get_flavor(full_config, flavor)
     print("Uploading " + Color.YELLOW + f + Color.END + " for flavor " + Color.GREEN + flavor + Color.END)
     mail = config["mailto"] if "mailto" in config else None
     name = config["bam_name"] if "bam_name" in config else None
@@ -428,7 +549,9 @@ def uploadBAM3(f, flavor, release_notes=None, dry_run=False):
     return BewareAppManager.deploy("dev", build_file=f, dry_run=dry_run,
                                    release_notes=release_notes,
                                    #send_mail=mail, 
-                                   post_slack=slack, bam_name=name)
+                                   post_slack=slack,
+                                   post_slack_release_notes=post_slack_release_notes,
+                                   bam_name=name)
 
 
 def pull_sdcard_files(args):
@@ -447,15 +570,21 @@ def gitstatus():
 
 def no_sub_parser(args):
     f = find_dot_adb()
-    call("s " + f.name)
+    edit(f.name, sublime=True)
 
 
 def move_run(args):
     load_config(args)
-    name = config["bam_name"] if "bam_name" else pck.replace("pt.beware.", "")
+    name = config["bam_name"] if "bam_name" else shorten_bam_name(pck)
     BewareAppManager.move(from_channel=args.from_channel, to_channel=args.to_channel, version=args.version,
                           identifier=name)
 
+
+# also in BewareAppManager
+def shorten_bam_name(name):
+    name.replace("pt.beware.", "")
+    name.replace("com.xtourmaker", "xtourmaker")
+    return name
 
 def interpret(args):
     load_config(args)
@@ -463,6 +592,9 @@ def interpret(args):
     import IPython
 
     IPython.embed()
+
+def loadadb2(args):
+    load_all_config()
 
 
 if __name__ == "__main__":
@@ -480,6 +612,8 @@ if __name__ == "__main__":
                                           help='Flavor of the app. No arguments to output the current one; a name change to that flavor; --add to add a new flavor to the .adb file; --env to print an export string for the enviroment variables for the current flavor.')
     parser_flavor.add_argument('--add', action='store_true')
     parser_flavor.add_argument('--env', action='store_true')
+    parser_flavor.add_argument('-x', action='store_true')
+    parser_flavor.add_argument('--dump', action='store_true')
     parser_flavor.add_argument('name', nargs='?')
     parser_flavor.set_defaults(func=flavor)
 
