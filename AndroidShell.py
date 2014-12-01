@@ -13,6 +13,7 @@ import BewareAppManager
 import requests
 from GradleParser import GradleParser
 from copy import deepcopy
+import time
 
 filename = ".adb"
 full_config = None
@@ -412,6 +413,28 @@ def get_flavor(json, name):
     else:
         return json[name]
 
+def publish(args):
+    load_config(args)
+    uploads = {}
+    for flavor in args.flavors:
+        fconfig = full_config[flavor]
+        pck = fconfig["package"]
+        #print(pck)
+        spck=shorten_bam_name(pck)
+        # print(spck)
+        apks = glob.glob("/Users/carlos/MEOCloud/APKs/*%s*apk" % spck)
+        apks.sort()
+        f = apks[-1]
+        #print(f)
+        uploads[pck] = f
+
+    for k,v in uploads.items():
+        print("%s - %s" % (k.rjust(30),v)) 
+    r = BewareAppManager.user_request("Correct? yN ", "yn", "n")
+    if r == "y":
+        for k,v in uploads.items():
+            call(["/Users/carlos/Beware/AndroidShell/publish/publish_apk.py", k, v, "production"])
+
 def deploy(args):
     load_config(args)
 
@@ -551,7 +574,8 @@ def uploadBAM3(f, flavor, release_notes=None, post_slack_release_notes=False, dr
                                    #send_mail=mail, 
                                    post_slack=slack,
                                    post_slack_release_notes=post_slack_release_notes,
-                                   bam_name=name)
+                                   bam_name=name,
+                                   auto_create=True)
 
 
 def pull_sdcard_files(args):
@@ -579,12 +603,29 @@ def move_run(args):
     BewareAppManager.move(from_channel=args.from_channel, to_channel=args.to_channel, version=args.version,
                           identifier=name)
 
+def open_play(args):
+    load_config(args)
+
+    if len(args.flavors) > 0:
+        for flavor in args.flavors:
+            f = get_flavor(full_config, flavor)
+            devacc = f["gplay_dev_acc"]
+            call(["open","https://play.google.com/apps/publish/?dev_acc=%s#ApkPlace:p=%s" % (devacc, f["package"])])
+            time.sleep(0.1)
+    else:
+        call(["open","https://play.google.com/apps/publish/?dev_acc=%s#ApkPlace:p=%s" % (config["gplay_dev_acc"], pkg)])
+
 
 # also in BewareAppManager
 def shorten_bam_name(name):
-    name.replace("pt.beware.", "")
-    name.replace("com.xtourmaker", "xtourmaker")
-    return name
+    return name.replace("pt.beware.", "").replace("com.xtourmaker", "xtourmaker")
+
+def cd_assets_folder(args):
+    load_config(args)
+    p = os.path.join(dirname,full_config["_gradle"],"src",flavorname,"assets")
+    # call("cd "+p)
+    print("cd "+p)
+    os.chdir(p)
 
 def interpret(args):
     load_config(args)
@@ -668,6 +709,17 @@ if __name__ == "__main__":
     parser_deploy.add_argument("--no-compile", "-nc", action='store_true')
     parser_deploy.add_argument("--no-mail", "-nm", action='store_true')
     parser_deploy.set_defaults(func=deploy)
+
+    parser_publish = subparsers.add_parser('publish', help="Publish to google play")
+    parser_publish.add_argument("flavors", nargs="*")
+    parser_publish.set_defaults(func=publish)
+
+    parser_open_play = subparsers.add_parser('play', help="Opens Google Play page for app(s).")
+    parser_open_play.add_argument("flavors", nargs="*")
+    parser_open_play.set_defaults(func=open_play)
+
+    parser_open_play = subparsers.add_parser('assets', help="cd's into the assets folder of the current flavor.")
+    parser_open_play.set_defaults(func=cd_assets_folder)
 
     parser_repl = subparsers.add_parser("repl", help="Starts a shell.")
     parser_repl.set_defaults(func=interpret)

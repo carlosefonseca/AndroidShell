@@ -29,3 +29,5 @@ proguard/
 .idea/
 
 .DS_Store
+*client_secrets*.json
+androidpublisher.dat
