@@ -334,12 +334,22 @@ def install(args):
     # This one returns the most recent one but requires GNU Find (brew install findutils)
     # gfind . -path "*/build/outputs/apk/*granada*.apk" -printf '%T+ %p\n' | sort -r | head -n 1 | cut -f 2 -d ' '
     load_config(args)
-    s = "find %s -path */build/outputs/apk/*%s*.apk" % (dirname, flavor)
-    x = subprocess.check_output(s.split(" ")).strip().decode().split("\n")[0]
-    adb("install -r %s" % x)
+    #s = "find %s -path */build/outputs/apk/*%s*.apk" % (dirname, flavor)
+    #x = subprocess.check_output(s.split(" ")).strip().decode().split("\n")[0]
+    #adb("install -r %s" % x)
+    if 'ANDROID_SERIAL' in os.environ:
+        print("ANDROID_SERIAL: "+os.environ['ANDROID_SERIAL'])
+
+    if len(args.flavors) == 0:
+        gradle_cmd = "./gradlew --daemon install%sDebug" % flavorname.title()
+    else:
+        gradle_cmd = "./gradlew --daemon instal%sDebug" % ("Debug assemble".join([x.title() for x in args.flavors]))
+    call(gradle_cmd)
+
 
 
 def install_start(args):
+    load_config(args)
     install(args)
     start(args)
 
@@ -458,10 +468,10 @@ def deploy(args):
         if len(args.flavors) == 0: print("Building ALL flavors.")
 
         if ("debug_only" in config and config["debug_only"]):
-            gradle_cmd = "%s/gradlew assemble%sDebug" % (
+            gradle_cmd = "%s/gradlew --daemon assemble%sDebug" % (
                 dirname, "Debug assemble".join([x.title() for x in args.flavors]))
         else:
-            gradle_cmd = "%s/gradlew assemble%sRelease" % (
+            gradle_cmd = "%s/gradlew --daemon assemble%sRelease" % (
                 dirname, "Release assemble".join([x.title() for x in args.flavors]))
 
         async_result = pool.apply_async(call, (gradle_cmd,))
@@ -624,7 +634,11 @@ def cd_assets_folder(args):
     load_config(args)
     p = os.path.join(dirname,full_config["_gradle"],"src",flavorname,"assets")
     # call("cd "+p)
-    print("cd "+p)
+    if args.no_cd:
+        print(p)
+    else:
+        print("cd "+p)
+    os.makedirs(p,exist_ok=True)
     os.chdir(p)
 
 def interpret(args):
@@ -679,12 +693,14 @@ if __name__ == "__main__":
     parser_restart.set_defaults(func=restart)
 
     parser_install = subparsers.add_parser('install', aliases=['i'], help='Installs the app. *')
+    parser_install.add_argument("flavors", nargs="*")
     parser_install.set_defaults(func=install)
 
     parser_uninstall = subparsers.add_parser('uninstall', aliases=['u'], help='Uninstalls the app. *')
     parser_uninstall.set_defaults(func=uninstall)
 
     parser_install_start = subparsers.add_parser('install-start', aliases=['is'], help='Installs and starts the app. *')
+    parser_install_start.add_argument("flavors", nargs="*")
     parser_install_start.set_defaults(func=install_start)
 
     # create the parser for the "move" command
@@ -718,8 +734,9 @@ if __name__ == "__main__":
     parser_open_play.add_argument("flavors", nargs="*")
     parser_open_play.set_defaults(func=open_play)
 
-    parser_open_play = subparsers.add_parser('assets', help="cd's into the assets folder of the current flavor.")
-    parser_open_play.set_defaults(func=cd_assets_folder)
+    parser_assets = subparsers.add_parser('assets', help="cd's into the assets folder of the current flavor.")
+    parser_assets.add_argument("--no-cd", action='store_true')
+    parser_assets.set_defaults(func=cd_assets_folder)
 
     parser_repl = subparsers.add_parser("repl", help="Starts a shell.")
     parser_repl.set_defaults(func=interpret)
