@@ -92,10 +92,7 @@ def load_config(args=None):
         print(".adb not found.")
         exit(1)
     config = read_dot_adb(f)
-    try:
-        pkg = args.package
-    except:
-        pkg = config["package"]
+    pkg = config["package"]
     if not pkg: pkg = config["package"]
     path = f.name
     dirname = os.path.dirname(path)
@@ -642,7 +639,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ADB Helper.")
     parser.add_argument("--all", "-a", action="store_true",
                         help="Runs the commands on all connected devices. Only for some commands that use adb (marked with *).")
-    parser.add_argument("--package", "-p", help="Specify the package name to use.")
     parser.add_argument('--dry-run', action='store_true', help='Don\'t make changes.')
     subparsers = parser.add_subparsers()
 
