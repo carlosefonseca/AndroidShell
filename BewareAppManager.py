@@ -19,7 +19,7 @@ try:
 except ImportError:
     from urlparse import urlparse, urljoin
 
-ANDROID_STUDIO_APP_SDK = "/Applications/Android Studio.app/sdk"
+ANDROID_STUDIO_APP_SDK = "/Applications/Utilities/sdk"
 
 BAM_FILE = ".bam"
 
