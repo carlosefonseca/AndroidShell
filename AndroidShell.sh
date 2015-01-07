@@ -1,31 +1,37 @@
 #!/usr/bin/env bash
 
-# Project shortcut - goes to project dir, displays the active project flavor and sets the enviroment vars for that flavor
-alias cdpr="cd ~/Path/To/Project && AndroidShell.py f && eval \`AndroidShell.py f --env\`"
+# This script contains Android related stuff, independent of the AndroidShell.py
 
-# Change flavor and set corresponding enviroment vars
-function AndroidFlavor() {
-    AndroidShell.py f $1 && $(AndroidShell.py f --env)
-}
 
-# Presents a list of connected devices, renamed according to the list and asks the user to select one.
+# Presents a list of connected devices and asks the user to select one.
 # If there's only one, that one will be automatically selected.
 # The selected device id will to stored on the ANDROID_SERIAL env var so that call to adb will go directly to that device.
 # Because this uses export, this script should be on you .bash_profile or some other file that gets sourced.
-function setandroid {
-    adb devices | sed '${/^$/d;}' | awk 'BEGIN {
-            array["410013c...	device"] = "Device XPTO";
-            x=0 }{ if ($0 in array) a = array[$0]; else a = $0;
-            if (x == 0) print a ; else print x "  " a; x++ }'
-    n=`adb devices | wc -l | awk {'print $1'}`
-    if [ $n -eq 3 ]; then
+setandroid() {
+    # print device list
+    setAndroid.rb
+    # get device count
+    n=$(setAndroid.rb simple | wc -l)
+    if [ $n -eq 1 ]; then
+        # if only one device, does not ask user
         number=1
     else
+        # if more than one device, ask the user for which one
         read -p "Device: " number
     fi
-    ID=`adb devices | sed -n "$((number+1))p" | perl -p -e 's/([^\s]+)\s+.*/\1/'`
-    export ANDROID_SERIAL=$ID
-    env | grep ANDROID_SERIAL
+
+    # if is number and within range
+    if [[ "$number" =~ ^[0-9]+$ ]] && [ "$number" -ge 1 -a "$number" -le $n ]; then
+        # obtains the device id, stores in env
+        export ANDROID_SERIAL=$(setAndroid.rb ${number})
+        # obtains the device model, stores in env
+        export ANDROID_MODEL=$(setAndroid.rb model)
+        # prints the current env
+        env | grep ANDROID_SERIAL
+        return 0
+    fi
+    echo "invalid"
+    return 1
 }
 
 # downloadFilesOfPackage fbooking -> lists files
@@ -64,6 +70,10 @@ function downloadAndroidFile {
     fi
 }
 
+function ceftimestamp {
+    date +"%F_%H.%M.%S"
+}
+
 # runs an adb command on all devices
 # ex: adball install -r somefile.apk
 function adball {
@@ -72,7 +82,14 @@ function adball {
 
 # screencapture current device
 function adbscreen {
-    adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > screen.png && open screen.png
+    A="screen-$(ceftimestamp)"
+    adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png
+}
+
+# screencapture current device and view file
+function adbscreenopen {
+    A="screen-$(ceftimestamp)"
+    adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png && open $A.png
 }
 
 # screencapture all devices
