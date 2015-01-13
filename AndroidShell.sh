@@ -96,3 +96,8 @@ function adbscreenopen {
 function adbscreenall {
     adb devices | grep -v List | grep device | perl -p -e 's/(\w+)\s.*/\1/' | xargs -I § sh -c 'adb -s "$1" shell screencap -p | perl -pe "s/\x0D\x0A/\x0A/g" > "screen_$1.png" && open "screen_$1.png"' -- §
 }
+
+adbscreendesk () {
+    A="screen-$(ceftimestamp)"
+    adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png && mv $A.png ~/Desktop/
+}
