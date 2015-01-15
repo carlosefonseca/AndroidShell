@@ -337,6 +337,28 @@ def install(args):
     if 'ANDROID_SERIAL' in os.environ:
         print("ANDROID_SERIAL: "+os.environ['ANDROID_SERIAL'])
 
+    if (args.deployed):
+        uploads = {}
+        for flavor in args.flavors:
+            fconfig = full_config[flavor]
+            pck = fconfig["package"]
+            #print(pck)
+            spck=shorten_bam_name(pck)
+            # print(spck)
+            apks = glob.glob("/Users/carlos/MEOCloud/APKs/*%s*apk" % spck)
+            apks.sort()
+            f = apks[-1]
+            #print(f)
+            uploads[pck] = f
+
+        for k,v in uploads.items():
+            print("%s - %s" % (k.rjust(30),v)) 
+        #r = BewareAppManager.user_request("Correct? yN ", "yn", "n")
+        #if r == "y":
+        for k,v in uploads.items():
+            call(["adb", "install", v])
+        return
+
     if len(args.flavors) == 0:
         gradle_cmd = "./gradlew --daemon install%sDebug" % flavorname.title()
     else:
