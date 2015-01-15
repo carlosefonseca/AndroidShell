@@ -43,18 +43,18 @@ function downloadAndroidFile {
             if [[ -z $1 ]]; then
                 echo "androidDownloadFile package <#firstFile> [<end>]"
             else
-    			adb shell ls /mnt/sdcard/Android/data/$1/cache | grep "13*" | tail -r -n 140 | perl -pe 's/\x0D\x0A/\n/g' | awk -v d=$(date +%s) 'BEGIN {x=1;print "N\tSecs\tFilename"} {print x "\t" d-substr($0,0,10) "\t" $0 ; x++}'
+    			adb shell ls /mnt/sdcard/Android/data/$1/cache | tail -r -n 140 | perl -pe 's/\x0D\x0A/\n/g' | awk -v d=$(date +%s) 'BEGIN {x=1;print "N\tSecs\tFilename"} {print x "\t" d-substr($0,0,10) "\t" $0 ; x++}'
             fi
         else
             D="/mnt/sdcard/Android/data/$1/cache"
             if [[ $2 -lt 0 ]]; then
-                A=$(adb shell ls $D | grep "13*" | tail -r -n 50 | tr '\r' '\0')
+                A=$(adb shell ls $D | tail -r -n 50 | tr '\r' '\0')
                 echo -e $A | xargs -0 -P 1 -I {} echo -e {}
             else
                 if [[ $2 -ge 2 ]]; then
-                    A=$(adb shell ls $D | grep "13*" |  tail -r -n $2 | tail -n 1 | tr '\r' '\0')
+                    A=$(adb shell ls $D | grep "14*" |  tail -r -n $2 | tail -n 1 | tr '\r' '\0')
                 else
-                    A=$(adb shell ls $D | grep "13*" |  tail -n 1 | tr '\r' '\0')
+                    A=$(adb shell ls $D | grep "14*" |  tail -n 1 | tr '\r' '\0')
                 fi
                 echo $A
                 adb pull $D/$A
