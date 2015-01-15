@@ -442,6 +442,45 @@ def publish(args):
         for k,v in uploads.items():
             call(["/Users/carlos/Beware/AndroidShell/publish/publish_apk.py", k, v, "production"])
 
+def install(args):
+    # This one returns the most recent one but requires GNU Find (brew install findutils)
+    # gfind . -path "*/build/outputs/apk/*granada*.apk" -printf '%T+ %p\n' | sort -r | head -n 1 | cut -f 2 -d ' '
+    load_config(args)
+    #s = "find %s -path */build/outputs/apk/*%s*.apk" % (dirname, flavor)
+    #x = subprocess.check_output(s.split(" ")).strip().decode().split("\n")[0]
+    #adb("install -r %s" % x)
+    if 'ANDROID_SERIAL' in os.environ:
+        print("ANDROID_SERIAL: "+os.environ['ANDROID_SERIAL'])
+
+    if (args.deployed):
+        uploads = {}
+        for flavor in args.flavors:
+            fconfig = full_config[flavor]
+            pck = fconfig["package"]
+            #print(pck)
+            spck=shorten_bam_name(pck)
+            # print(spck)
+            apks = glob.glob("/Users/carlos/MEOCloud/APKs/*%s*apk" % spck)
+            apks.sort()
+            f = apks[-1]
+            #print(f)
+            uploads[pck] = f
+
+        for k,v in uploads.items():
+            print("%s - %s" % (k.rjust(30),v)) 
+        #r = BewareAppManager.user_request("Correct? yN ", "yn", "n")
+        #if r == "y":
+        for k,v in uploads.items():
+            call(["adb", "install", v])
+        return
+
+    if len(args.flavors) == 0:
+        gradle_cmd = "./gradlew --daemon install%sDebug" % flavorname.title()
+    else:
+        gradle_cmd = "./gradlew --daemon instal%sDebug" % ("Debug assemble".join([x.title() for x in args.flavors]))
+    call(gradle_cmd)
+
+
 def deploy(args):
     load_config(args)
 
@@ -690,6 +729,7 @@ if __name__ == "__main__":
 
     parser_install = subparsers.add_parser('install', aliases=['i'], help='Installs the app. *')
     parser_install.add_argument("flavors", nargs="*")
+    parser_install.add_argument("--deployed", "-d", action='store_true')
     parser_install.set_defaults(func=install)
 
     parser_uninstall = subparsers.add_parser('uninstall', aliases=['u'], help='Uninstalls the app. *')
