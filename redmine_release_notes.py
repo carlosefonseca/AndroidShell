@@ -15,7 +15,10 @@ def process(project):
     # assigned to: me
     # status: resolved
     # sort: tracker:desc (Feature, Bug), priority:desc (High, Low)
-    j = requests.get('http://192.168.75.45:8281/redmine/projects/%s/issues.json?assigned_to_id=me&status_id=3&sort=tracker:desc,priority:desc' % project, headers=headers).json()
+    try:
+        j = requests.get('http://192.168.75.45:8281/redmine/projects/%s/issues.json?assigned_to_id=me&status_id=3&sort=tracker:desc,priority:desc' % project, headers=headers, timeout=5).json()
+    except Exception as e:
+        j = requests.get('http://81.84.240.165:8281/redmine/projects/%s/issues.json?assigned_to_id=me&status_id=3&sort=tracker:desc,priority:desc' % project, headers=headers).json()
 
     issues = j["issues"]
 
