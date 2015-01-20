@@ -356,7 +356,7 @@ def install(args):
         #r = BewareAppManager.user_request("Correct? yN ", "yn", "n")
         #if r == "y":
         for k,v in uploads.items():
-            call(["adb", "install", v])
+            call(["adb", "install", "-r", v])
         return
 
     if len(args.flavors) == 0:
@@ -364,8 +364,7 @@ def install(args):
     else:
         gradle_cmd = "./gradlew --daemon instal%sDebug" % ("Debug assemble".join([x.title() for x in args.flavors]))
     call(gradle_cmd)
-
-
+    
 
 def install_start(args):
     load_config(args)
@@ -496,44 +495,6 @@ def slack(text, channel, username=None, icon_emoji=None):
     except requests.exceptions.RequestException as e:
         print('HTTP Request failed')
 
-
-def install(args):
-    # This one returns the most recent one but requires GNU Find (brew install findutils)
-    # gfind . -path "*/build/outputs/apk/*granada*.apk" -printf '%T+ %p\n' | sort -r | head -n 1 | cut -f 2 -d ' '
-    load_config(args)
-    #s = "find %s -path */build/outputs/apk/*%s*.apk" % (dirname, flavor)
-    #x = subprocess.check_output(s.split(" ")).strip().decode().split("\n")[0]
-    #adb("install -r %s" % x)
-    if 'ANDROID_SERIAL' in os.environ:
-        print("ANDROID_SERIAL: "+os.environ['ANDROID_SERIAL'])
-
-    if (args.deployed):
-        uploads = {}
-        for flavor in args.flavors:
-            fconfig = full_config[flavor]
-            pck = fconfig["package"]
-            #print(pck)
-            spck=shorten_bam_name(pck)
-            # print(spck)
-            apks = glob.glob("/Users/carlos/MEOCloud/APKs/*%s*apk" % spck)
-            apks.sort()
-            f = apks[-1]
-            #print(f)
-            uploads[pck] = f
-
-        for k,v in uploads.items():
-            print("%s - %s" % (k.rjust(30),v)) 
-        #r = BewareAppManager.user_request("Correct? yN ", "yn", "n")
-        #if r == "y":
-        for k,v in uploads.items():
-            call(["adb", "install", v])
-        return
-
-    if len(args.flavors) == 0:
-        gradle_cmd = "./gradlew --daemon install%sDebug" % flavorname.title()
-    else:
-        gradle_cmd = "./gradlew --daemon instal%sDebug" % ("Debug assemble".join([x.title() for x in args.flavors]))
-    call(gradle_cmd)
 
 
 def deploy(args):
@@ -792,6 +753,7 @@ if __name__ == "__main__":
 
     parser_install_start = subparsers.add_parser('install-start', aliases=['is'], help='Installs and starts the app. *')
     parser_install_start.add_argument("flavors", nargs="*")
+    parser_install_start.add_argument("--deployed", "-d", action='store_true')
     parser_install_start.set_defaults(func=install_start)
 
     # create the parser for the "move" command
