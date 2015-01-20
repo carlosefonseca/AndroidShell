@@ -110,6 +110,6 @@ incVersionCode () {
         echo "Found these AndroidManifest files:"
         find . -name "AndroidManifest.xml" -path "*/src/*"
     else
-        perl -i -pe 's/(?<=versionCode=")(\d+)/$1+1/ge' WDAA/src/main/AndroidManifest.xml
+        perl -i -pe 's/(?<=versionCode=")(\d+)/$1+1/ge' $1
     fi
 }
