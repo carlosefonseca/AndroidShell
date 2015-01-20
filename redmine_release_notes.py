@@ -3,7 +3,14 @@
 import requests
 import os
 
-def process(project):
+def outputTicket(ticket, slack=False):
+    if slack:
+        return " <http://81.84.240.165:8281/redmine/issues/%d|#%d> - %s\n" % (ticket["id"], ticket["id"], ticket["subject"])
+    else:            
+        return " #%d - %s\n" % (ticket["id"], ticket["subject"])
+
+
+def process(project, slack=False):
     try:
         a = open(os.path.join(os.path.expanduser("~"), ".redmine")).read().strip()
     except:
@@ -24,6 +31,7 @@ def process(project):
 
     feat = [x for x in issues if x["tracker"]["id"] == 2]
     bugs = [x for x in issues if x["tracker"]["id"] == 1]
+    othr = [x for x in issues if x["tracker"]["id"] > 2]
 
     out = ""
 
@@ -31,13 +39,20 @@ def process(project):
         out+="Funcionalidades implementadas:\n"
 
         for i in feat:
-            out+=" #%d - %s\n" % (i["id"], i["subject"])
+            out += outputTicket(i, slack)
 
     if len(bugs) > 0:
         out+="Bugs corrigidos:\n"
 
         for i in bugs:
-            out+=" #%d - %s\n" % (i["id"], i["subject"])
+            out += outputTicket(i, slack)
+
+    if len(othr) > 0:
+        out+="Outros Tickets:\n"
+
+        for i in othr:
+            out += outputTicket(i, slack)
+
     return out.strip()
 
 if __name__ == '__main__':
@@ -46,6 +61,7 @@ if __name__ == '__main__':
 
     argparser = argparse.ArgumentParser(description="Retrieves 'Resolved' tickets from a Redmine project and formats them for release notes.")
     argparser.add_argument('project_name', help='Redmine\'s project name')
+    argparser.add_argument('--slack', action='store_true', help='Creates slack style URL\'s for tickets.')
 
     args = argparser.parse_args()
-    print(process(args.project_name))
+    print(process(args.project_name, slack=args.slack))
