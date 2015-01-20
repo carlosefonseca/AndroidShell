@@ -101,3 +101,15 @@ adbscreendesk () {
     A="screen-$(ceftimestamp)"
     adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png && mv $A.png ~/Desktop/
 }
+
+incVersionCode () {
+    if [[ -z $1 ]]; then
+        echo "Increments the versionCode on a AndroidManifest file."
+        echo "Usage: incVersionCode path/to/AndroidManifest.xml"
+        echo
+        echo "Found these AndroidManifest files:"
+        find . -name "AndroidManifest.xml" -path "*/src/*"
+    else
+        perl -i -pe 's/(?<=versionCode=")(\d+)/$1+1/ge' WDAA/src/main/AndroidManifest.xml
+    fi
+}
