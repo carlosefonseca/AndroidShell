@@ -537,7 +537,7 @@ def deploy(args):
             import redmine_release_notes
 
             with open(release_notes_file, "w+") as f:
-                f.write(redmine_release_notes.process(redmine_project))
+                f.write(redmine_release_notes.process(redmine_project, slack=True))
 
     edit(release_notes_file)
 
