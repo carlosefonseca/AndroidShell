@@ -460,9 +460,42 @@ def publish(args):
     for k,v in uploads.items():
         print("%s - %s" % (k.rjust(30),v)) 
     r = BewareAppManager.user_request("Correct? yN ", "yn", "n")
+
     if r == "y":
+        successes = {}
+        errors = {}
         for k,v in uploads.items():
-            call(["/Users/carlos/Beware/AndroidShell/publish/publish_apk.py", k, v, "production"])
+            if args.skip_upload or call(["/Users/carlos/Beware/AndroidShell/publish/publish_apk.py", k, v, "production"]) == 0:
+                successes[k]=v
+            else:
+                errors[k] = v
+
+        if not args.skip_slack:
+            for k,v in successes.items():
+                (p,vn,vc,n,i) = BewareAppManager.get_apk_build_info(v)
+                slack("<https://play.google.com/store/apps/details?id=%s|%s> %s (%s) Publicada!" % (k,n,vn,vc), "#"+config["slack"], username="Google Play", icon_emoji=":google_play:")
+            
+        for k,v in errors.items():
+            print("ERROR UPLOADING: "+v)
+
+
+def slack(text, channel, username=None, icon_emoji=None):
+    try:
+        data = {"text":text,"channel":channel}
+        if username:
+            data["username"]=username
+        if icon_emoji:
+            data["icon_emoji"]=icon_emoji
+
+        r = requests.post(
+            url="https://hooks.slack.com/services/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",
+            data = json.dumps(data)
+        )
+        print('Response HTTP Status Code : {status_code}'.format(status_code=r.status_code))
+        print('Response HTTP Response Body : {content}'.format(content=r.content))
+    except requests.exceptions.RequestException as e:
+        print('HTTP Request failed')
+
 
 def install(args):
     # This one returns the most recent one but requires GNU Find (brew install findutils)
@@ -784,8 +817,10 @@ if __name__ == "__main__":
     parser_deploy.add_argument("--no-mail", "-nm", action='store_true')
     parser_deploy.set_defaults(func=deploy)
 
-    parser_publish = subparsers.add_parser('publish', help="Publish to google play")
+    parser_publish = subparsers.add_parser('publish', help="Publish to Google Play and post to Slack.")
     parser_publish.add_argument("flavors", nargs="*")
+    parser_publish.add_argument("--skip-upload", "-nu", action='store_true', help="Skips the upload to Google Play.")
+    parser_publish.add_argument("--skip-slack", "-ns", action='store_true', help="Skips the post to Slack.")
     parser_publish.set_defaults(func=publish)
 
     parser_open_play = subparsers.add_parser('play', help="Opens Google Play page for app(s).")
