@@ -194,6 +194,13 @@ def flavor(args):
             set_flavor(f, flavor, j)
             print("Selected flavor: " + flavor)
         else:
+            keys = list(flavors.keys())
+            for k in keys:
+                if k.startswith(flavor):
+                    set_flavor(f, k, j)
+                    print("Selected flavor: " + k)
+                    return
+
             print("Flavor '%s' doesn't exist!" % flavor)
 
 
