@@ -2,6 +2,7 @@
 
 # coding: utf-8
 
+from sys import exit
 import os
 import json
 import argparse
@@ -225,18 +226,17 @@ def flavor(args):
             print("Flavor '%s' doesn't exist!" % flavor)
 
 
-def call(args):
-    # print("CALL: " + str(args))
-    if type(args) == str:
-        args = args.split(" ")
-    else:
-        args = [item.split(" ") for item in args]
-        args = [item for sublist in args for item in sublist]
-        # print(" ")
-    # print(args)
-    # print(" ")
+def call(args, split=True):
+    if split:
+        if type(args) == str:
+            args = args.split(" ")
+        else:
+            args = [item.split(" ") for item in args]
+            args = [item for sublist in args for item in sublist]
+    #print(args)
     print(" $ " + " ".join(args))
     return subprocess.call(args)
+
 
 def edit(file, sublime=False):
     if sublime:
@@ -244,7 +244,6 @@ def edit(file, sublime=False):
     else:
         call("open -e -n -W "+file)
 
-# def create_config_set(args)
 
 def create_config(args):
     config = dict()
@@ -267,57 +266,68 @@ def add_flavor(args):
     print("Saved on " + f.name)
 
 
-def clear(args):
+def start(args):
     load_config(args)
-    adb("shell pm clear " + config["package"])
-
-
-def clear_start(args):
-    load_config(args)
-    adb_list(["shell pm clear " + config["package"],
-              "shell am start -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
-                  pkg, config["activity"])])
-
+    adb_start(pkg, config["activity"])
 
 def debug(args):
     load_config(args)
-    call("adb shell am start -D -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
-        pkg, config["activity"]))
-
-
-def start(args):
-    load_config(args)
-    adb("shell am start -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
-        pkg, config["activity"]))
-
+    adb_start(pkg, config["activity"], debug=True)
 
 def close(args):
     load_config(args)
-    adb("shell am force-stop %s" % pkg)
+    adb_force_stop(pkg)
 
+def clear(args):
+    load_config(args)
+    adb_clear(pkg)
+
+def clear_start(args):
+    load_config(args)
+    adb_clear(pkg)
+    adb_start(pkg, config["activity"])
 
 def restart(args):
     load_config(args)
+    adb_force_stop(pkg)
+    adb_start(pkg, config["activity"])
+
+def install_start(args):
+    load_config(args)
+    install(args)
+    adb_start(pkg, config["activity"])
+
+def uninstall(args):
+    load_config(args)
+    adb_uninstall(pkg)
+
+# ADB WRAPPER
+
+def adb_uninstall(pkg):
+    adb("uninstall %s" % pkg, all=args.all)
+
+def adb_clear(pkg):
+    adb("shell pm clear " + pkg)
+
+def adb_start(pkg, activity, debug=False):
+    adb("shell am start%s -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (" -D" if debug else "", pkg, activity))    
+
+def adb_force_stop(pkg):
     adb("shell am force-stop %s" % pkg)
-    adb("shell am start -n %s/%s -a android.intent.action.MAIN -c android.intent.category.LAUNCHER" % (
-        pkg, config["activity"]))
 
+def adb_install(apk_file):
+    adb("install -r "+apk_file)
 
-def adb_list(cmds, all=None):
-    if not all: all = args.all
+def adb_pull(path):
+    adb('pull %s' % path)
 
-    if all:
-        devices = [d.split("\t")[0] for d in
-                   subprocess.check_output(["adb", "devices"]).decode("ascii").split("\n")[1:-2]]
-        for d in devices:
-            for c in cmds:
-                call(["adb", "-s", d, c])
-    else:
-        for c in cmds:
-            call("adb " + c)
+def adb_ls(path):
+    return [x.decode() for x in subprocess.check_output(["adb", "shell", "ls", path]).split()]
 
+devices = None
 
 def adb(cmd, all=None):
+    global devices
     if not all: all = args.all
     if type(cmd) == str:
         cmd = cmd.split(" ")
@@ -326,71 +336,59 @@ def adb(cmd, all=None):
         cmd = [item for sublist in cmd for item in sublist]
 
     if all:
-        devices = [d.split("\t")[0] for d in
-                   subprocess.check_output(["adb", "devices"]).decode("ascii").split("\n")[1:-2]]
+        if not devices: devices = adb_device_list()
         [call(["adb", "-s", d] + cmd) for d in devices]
 
     else:
         call(["adb"] + cmd)
 
+def adb_device_list():
+    return [d.split("\t")[0] for d in subprocess.check_output(["adb", "devices"]).decode("ascii").split("\n")[1:-2]]
+
 
 def install(args):
-    # This one returns the most recent one but requires GNU Find (brew install findutils)
-    # gfind . -path "*/build/outputs/apk/*granada*.apk" -printf '%T+ %p\n' | sort -r | head -n 1 | cut -f 2 -d ' '
     load_config(args)
-    #s = "find %s -path */build/outputs/apk/*%s*.apk" % (dirname, flavor)
-    #x = subprocess.check_output(s.split(" ")).strip().decode().split("\n")[0]
-    #adb("install -r %s" % x)
     if 'ANDROID_SERIAL' in os.environ:
         print("ANDROID_SERIAL: "+os.environ['ANDROID_SERIAL'])
 
+    flavors = args.flavors if len(args.flavors) != 0 else [flavorname]
+
     if (args.deployed):
         uploads = {}
-        for flavor in args.flavors:
+        folder = BewareAppManager.get_user_data().storage_folder
+        for flavor in flavors:
             fconfig = full_config[flavor]
             pck = fconfig["package"]
-            #print(pck)
             spck=shorten_bam_name(pck)
-            # print(spck)
-            apks = glob.glob("/Users/carlos/MEOCloud/APKs/*%s*apk" % spck)
+            apks = glob.glob(os.path.join(folder,"%s*apk" % spck))
             apks.sort()
             f = apks[-1]
-            #print(f)
             uploads[pck] = f
 
         for k,v in uploads.items():
             print("%s - %s" % (k.rjust(30),v)) 
-        #r = BewareAppManager.user_request("Correct? yN ", "yn", "n")
-        #if r == "y":
+
         for k,v in uploads.items():
-            call(["adb", "install", "-r", v])
+            adb_install(v)
         return
 
-    if len(args.flavors) == 0:
-        gradle_cmd = "./gradlew --daemon install%sDebug" % flavorname.title()
-    else:
-        gradle_cmd = "./gradlew --daemon instal%sDebug" % ("Debug assemble".join([x.title() for x in args.flavors]))
-    call(gradle_cmd)
+    gradle_install(flavors)
     
-
-def install_start(args):
-    load_config(args)
-    install(args)
-    start(args)
+def gradle_install(flavors):
+    gradle_cmd = "./gradlew --daemon instal%sDebug" % ("Debug assemble".join([f.title() for f in flavors]))
+    call(gradle_cmd)    
 
 
-def uninstall(args):
-    load_config(args)
-    adb("uninstall %s" % pkg, all=args.all)
+def opendb(args):
+    pulldb(args, open=True)
 
-
-def pulldb(args):
+def pulldb(args, open=False):
     load_config(args)
 
     dbn = args.name if args.name else config["dbname"]
     dbnf = dbn if dbn.endswith(".db") else dbn+".db"
 
-    call("pkill Base")
+    if open: call("pkill Base")
     call("rm " + dbn)
 
     # trying direct pull
@@ -409,17 +407,27 @@ def pulldb(args):
             call("adb pull /sdcard/%s-journal %s-journal" % (dbn, dbnf))
 
         else:
-            # trying run-as
-            call("adb shell rm /sdcard/" + dbn)
-            call("adb shell run-as \"%s\" cp databases/%s /sdcard/" % (pkg, dbn))
-            call("adb shell run-as \"%s\" cp databases/%s-journal /sdcard/" % (pkg, dbn))
+            # trying alternative root
+            call("adb shell rm /sdcard/%s" % dbn)
+            call("adb shell rm /sdcard/%s-journal" % dbn)
+            call(["adb", "shell", "su -c 'cp /data/user/0/%s/databases/%s /sdcard/'" % (pkg, dbn)], split=False)
+            call(["adb", "shell", "su -c 'cp /data/user/0/%s/databases/%s-journal /sdcard/'" % (pkg, dbn)], split=False)
             success = call("adb pull /sdcard/%s %s" % (dbn, dbnf)) == 0
             if success:
                 call("adb pull /sdcard/%s-journal %s-journal" % (dbn, dbnf))
 
+            else:
+                # trying run-as
+                call("adb shell rm /sdcard/" + dbn)
+                call("adb shell run-as \"%s\" cp databases/%s /sdcard/" % (pkg, dbn))
+                call("adb shell run-as \"%s\" cp databases/%s-journal /sdcard/" % (pkg, dbn))
+                success = call("adb pull /sdcard/%s %s" % (dbn, dbnf)) == 0
+                if success:
+                    call("adb pull /sdcard/%s-journal %s-journal" % (dbn, dbnf))
+
     if success:
         call("sqlite3 %s vacuum" % dbnf)
-        call(["open", dbnf])
+        if open: call(["open", dbnf])
     else:
         print("Failed to pull file :(")
         exit(1)
@@ -493,14 +501,25 @@ def slack(text, channel, username=None, icon_emoji=None):
         if icon_emoji:
             data["icon_emoji"]=icon_emoji
 
+        try:
+            slack_url = BewareAppManager.get_user_data().slack_url
+        except:
+            slack_url = None
+
+        if not slack_url:
+            print("slack_url is not configured on %s."%BewareAppManager.get_bam_file())
+            return False
+
         r = requests.post(
-            url="https://hooks.slack.com/services/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",
+            url=slack_url,
             data = json.dumps(data)
         )
         print('Response HTTP Status Code : {status_code}'.format(status_code=r.status_code))
         print('Response HTTP Response Body : {content}'.format(content=r.content))
+        return True
     except requests.exceptions.RequestException as e:
         print('HTTP Request failed')
+        return False
 
 
 
@@ -651,9 +670,9 @@ def pull_sdcard_files(args):
     load_config(args)
     # call('adb shell ls /sdcard/Android/data/%s/files | tr \'\\r\' \'\\0\' | xargs -I § adb pull "/sdcard/Android/data/%s/files/§"' % (pkg, pkg))
     path = "/sdcard/Android/data/%s/files" % pkg
-    files = [x.decode() for x in subprocess.check_output(["adb", "shell", "ls", path]).split()]
+    files = adb_ls(path)
     for f in files:
-        call('adb pull %s/%s' % (path, f))
+        adb_pull("%s/%s" % (path, f))
 
 
 def gitstatus():
@@ -774,6 +793,10 @@ if __name__ == "__main__":
     parser_pulldb = subparsers.add_parser('pulldb', aliases=['p'], help='Pulls a db from a device.')
     parser_pulldb.add_argument("--name", "-n", help="File name of the database to pull.")
     parser_pulldb.set_defaults(func=pulldb)
+
+    parser_opendb = subparsers.add_parser('opendb', aliases=['db'], help='Pulls and opens a db from a device.')
+    parser_opendb.add_argument("--name", "-n", help="File name of the database to open.")
+    parser_opendb.set_defaults(func=opendb)
 
     parser_pullsd = subparsers.add_parser('pullsd', aliases=['psd'],
                                           help='Pulls all files from the app\'s data folder on the sdcard.')

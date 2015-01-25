@@ -55,6 +55,8 @@ def old_get_data():
         print("App not configured. Use 'create-config' first.")
         return None
 
+def get_bam_file():
+    return os.path.expanduser("~/" + BAM_FILE);
 
 def create_user_data():
     u = UserBam()
@@ -65,7 +67,8 @@ def create_user_data():
     u.frm = "%s <%s>" % (email_name, email)
     if not u.base_url.endswith("/"):
         u.base_url += "/"
-    json.dump(u.__dict__, file(os.path.expanduser("~/" + BAM_FILE), "w+"), sort_keys=True, indent=2)
+    u.slack_url = user_request("Slack incomming web hook url (https://my.slack.com/services): ")
+    json.dump(u.__dict__, file(get_bam_file(), "w+"), sort_keys=True, indent=2)
     return u
 
 
@@ -90,6 +93,7 @@ class UserBam:
         self.storage_folder = None
         self.base_url = None
         self.frm = None
+        self.slack_url=None
         if dict:
             self.__dict__ = dict
 
