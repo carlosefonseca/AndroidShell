@@ -642,6 +642,8 @@ def deploy(args):
     else:
         BewareAppManager.mail_multiple(to=mails, apps=uploaded, dry_run=args.dry_run)
 
+    print(Color.BOLD +"\nRemember to let it upload…"+ Color.END)
+
     # if "slack" in config and config["slack"]:
     #     print()
     #     drytxt = ("[dry-run]" if args.dry_run else "")
