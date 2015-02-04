@@ -481,16 +481,19 @@ def publish(args):
         for k,v in uploads.items():
             if args.skip_upload or call(["/Users/carlos/Beware/AndroidShell/publish/publish_apk.py", k, v, "production"]) == 0:
                 successes[k]=v
-            else:
-                errors[k] = v
-
-        if not args.skip_slack:
-            for k,v in successes.items():
                 (p,vn,vc,n,i) = BewareAppManager.get_apk_build_info(v)
                 slack("<https://play.google.com/store/apps/details?id=%s|%s> %s (%s) Publicada!" % (k,n,vn,vc), "#"+config["slack"], username="Google Play", icon_emoji=":google_play:")
+            else:
+                errors[k] = v
+                print("ERROR UPLOADING: "+v)
+
+        # if not args.skip_slack:
+        #     for k,v in successes.items():
+        #         (p,vn,vc,n,i) = BewareAppManager.get_apk_build_info(v)
+        #         slack("<https://play.google.com/store/apps/details?id=%s|%s> %s (%s) Publicada!" % (k,n,vn,vc), "#"+config["slack"], username="Google Play", icon_emoji=":google_play:")
             
-        for k,v in errors.items():
-            print("ERROR UPLOADING: "+v)
+        # for k,v in errors.items():
+        #     print("ERROR UPLOADING: "+v)
 
 
 def slack(text, channel, username=None, icon_emoji=None):
