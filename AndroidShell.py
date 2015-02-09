@@ -375,7 +375,7 @@ def install(args):
     gradle_install(flavors)
     
 def gradle_install(flavors):
-    gradle_cmd = "./gradlew --daemon instal%sDebug" % ("Debug assemble".join([f.title() for f in flavors]))
+    gradle_cmd = "./gradlew --daemon instal%sDebug" % ("Debug assemble".join([f[0].upper()+f[1:] for f in flavors]))
     call(gradle_cmd)    
 
 
@@ -550,10 +550,10 @@ def deploy(args):
 
         if ("debug_only" in config and config["debug_only"]):
             gradle_cmd = "%s/gradlew --daemon assemble%sDebug" % (
-                dirname, "Debug assemble".join([x.title() for x in args.flavors]))
+                dirname, "Debug assemble".join([x[0].upper()+x[1:] for x in args.flavors]))
         else:
             gradle_cmd = "%s/gradlew --daemon assemble%sRelease" % (
-                dirname, "Release assemble".join([x.title() for x in args.flavors]))
+                dirname, "Release assemble".join([x[0].upper()+x[1:] for x in args.flavors]))
 
         async_result = pool.apply_async(call, (gradle_cmd,))
 
