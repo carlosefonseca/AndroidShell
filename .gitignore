@@ -31,3 +31,4 @@ proguard/
 .DS_Store
 *client_secrets*.json
 androidpublisher.dat
+*.pyc

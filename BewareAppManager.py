@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # coding=utf-8
 
 # Should work with python 2.6+ and python 3+
@@ -68,7 +68,7 @@ def create_user_data():
     if not u.base_url.endswith("/"):
         u.base_url += "/"
     u.slack_url = user_request("Slack incomming web hook url (https://my.slack.com/services): ")
-    json.dump(u.__dict__, file(get_bam_file(), "w+"), sort_keys=True, indent=2)
+    json.dump(u.__dict__, open(get_bam_file(), "w+"), sort_keys=True, indent=2)
     return u
 
 
@@ -615,93 +615,94 @@ if __name__ == "__main__":
         u = user_request("Create user data now? [Y/n]", "yn", "y")
         if u == "y":
             user_data = create_user_data()
+    else:
 
 
 
 
 
-    # create app
-    # create config file
-    # create new version <channel>
-    # copy version to channel
+        # create app
+        # create config file
+        # create new version <channel>
+        # copy version to channel
 
-    #parser = argparse.ArgumentParser(description='…')
-    #parser.add_argument("command", choices=["create", "create-config", "deploy", "move"])
-    #
-    #args = parser.parse_args()
-
-
-
-    # create the top-level parser
-    parser = argparse.ArgumentParser(description="Beware App Manager command line interface.")
-    parser.add_argument('--dry-run', action='store_true', help='Don\'t make changes.')
-    subparsers = parser.add_subparsers(help='sub-command help')
-
-    # create the parser for the "create" command
-    parser_create = subparsers.add_parser('create',
-                                          help='Create a new app on the server and a config file on this folder.')
-    parser_create.set_defaults(func=create_run)
-
-    # create the parser for the "config" command
-    parser_config = subparsers.add_parser('config', help='Create a config file on this folder.')
-    parser_config.set_defaults(func=create_config_run)
-
-    # create the parser for the "move" command
-    parser_move = subparsers.add_parser("move", help="Move a version from one channel to another.")
-    parser_move.add_argument("from_channel")
-    parser_move.add_argument("to_channel")
-    parser_move.add_argument("version", nargs="?", default=None)
-    parser_move.add_argument("-identifier", nargs="?", default=None)
-    parser_move.set_defaults(func=move_run)
-
-    # create the parser for the "deploy" command
-    parser_deploy = subparsers.add_parser("deploy", help="Deploy a new app version.")
-    parser_deploy.add_argument("channel")
-    parser_deploy.add_argument('file', help='The file to upload.')
-    parser_deploy.add_argument('--mail', help='Send the release to the configured emails.')
-    parser_deploy.add_argument('--slack', help='Post a message to a Slack channel.')
-    parser_deploy.set_defaults(func=deploy_run)
-
-    # create the parser for the "releases" command
-    parser_releases = subparsers.add_parser("releases", help="Display release notes for release.")
-    parser_releases.add_argument("app")
-    parser_releases.add_argument("channel", nargs="?")
-    parser_releases.set_defaults(func=releases_run)
-
-    # create the parser for the "mail" command
-    parser_mail = subparsers.add_parser("mail", help="Send an email with the details of a release.")
-    parser_mail.add_argument("frm", nargs="?")
-    parser_mail.add_argument("to", nargs="?")
-    parser_mail.add_argument("apps", nargs="?")
-    parser_mail.add_argument("channel")
-    parser_mail.set_defaults(func=mail_multiple_run)
-
-    # create the parser for the "slack" command
-    parser_slack = subparsers.add_parser("slack", help="Send a message to Slack with a release.")
-    parser_slack.add_argument("app", nargs="?")
-    parser_slack.add_argument("channel")
-    parser_slack.add_argument("--slack_channel", "-s", nargs="?")
-    parser_slack.add_argument('--release_notes', action='store_true', help='Also post the release notes.')
-    parser_slack.set_defaults(func=slack_run)
-
-    parser_repl = subparsers.add_parser("repl", help="Starts a shell.")
-    parser_repl.set_defaults(func=interpret)
-
-    parser_icon = subparsers.add_parser("icon", help="Extracts the icon from an app package.")
-    parser_icon.add_argument("file")
-    parser_icon.add_argument("bamName", nargs="?")
-    parser_icon.set_defaults(func=extractIconCMD)
-
-    args = parser.parse_args()
-    print(args)
-    args.func(args)
-
-    # parse some argument lists
-    #Namespace(bar=12, foo=False)
-    #parser.parse_args(['--foo', 'b', '--baz', 'Z'])
-    #Namespace(baz='Z', foo=True)
+        #parser = argparse.ArgumentParser(description='…')
+        #parser.add_argument("command", choices=["create", "create-config", "deploy", "move"])
+        #
+        #args = parser.parse_args()
 
 
-    #if ()
+
+        # create the top-level parser
+        parser = argparse.ArgumentParser(description="Beware App Manager command line interface.")
+        parser.add_argument('--dry-run', action='store_true', help='Don\'t make changes.')
+        subparsers = parser.add_subparsers(help='sub-command help')
+
+        # create the parser for the "create" command
+        parser_create = subparsers.add_parser('create',
+                                              help='Create a new app on the server and a config file on this folder.')
+        parser_create.set_defaults(func=create_run)
+
+        # create the parser for the "config" command
+        parser_config = subparsers.add_parser('config', help='Create a config file on this folder.')
+        parser_config.set_defaults(func=create_config_run)
+
+        # create the parser for the "move" command
+        parser_move = subparsers.add_parser("move", help="Move a version from one channel to another.")
+        parser_move.add_argument("from_channel")
+        parser_move.add_argument("to_channel")
+        parser_move.add_argument("version", nargs="?", default=None)
+        parser_move.add_argument("-identifier", nargs="?", default=None)
+        parser_move.set_defaults(func=move_run)
+
+        # create the parser for the "deploy" command
+        parser_deploy = subparsers.add_parser("deploy", help="Deploy a new app version.")
+        parser_deploy.add_argument("channel")
+        parser_deploy.add_argument('file', help='The file to upload.')
+        parser_deploy.add_argument('--mail', help='Send the release to the configured emails.')
+        parser_deploy.add_argument('--slack', help='Post a message to a Slack channel.')
+        parser_deploy.set_defaults(func=deploy_run)
+
+        # create the parser for the "releases" command
+        parser_releases = subparsers.add_parser("releases", help="Display release notes for release.")
+        parser_releases.add_argument("app")
+        parser_releases.add_argument("channel", nargs="?")
+        parser_releases.set_defaults(func=releases_run)
+
+        # create the parser for the "mail" command
+        parser_mail = subparsers.add_parser("mail", help="Send an email with the details of a release.")
+        parser_mail.add_argument("frm", nargs="?")
+        parser_mail.add_argument("to", nargs="?")
+        parser_mail.add_argument("apps", nargs="?")
+        parser_mail.add_argument("channel")
+        parser_mail.set_defaults(func=mail_multiple_run)
+
+        # create the parser for the "slack" command
+        parser_slack = subparsers.add_parser("slack", help="Send a message to Slack with a release.")
+        parser_slack.add_argument("app", nargs="?")
+        parser_slack.add_argument("channel")
+        parser_slack.add_argument("--slack_channel", "-s", nargs="?")
+        parser_slack.add_argument('--release_notes', action='store_true', help='Also post the release notes.')
+        parser_slack.set_defaults(func=slack_run)
+
+        parser_repl = subparsers.add_parser("repl", help="Starts a shell.")
+        parser_repl.set_defaults(func=interpret)
+
+        parser_icon = subparsers.add_parser("icon", help="Extracts the icon from an app package.")
+        parser_icon.add_argument("file")
+        parser_icon.add_argument("bamName", nargs="?")
+        parser_icon.set_defaults(func=extractIconCMD)
+
+        args = parser.parse_args()
+        print(args)
+        args.func(args)
+
+        # parse some argument lists
+        #Namespace(bar=12, foo=False)
+        #parser.parse_args(['--foo', 'b', '--baz', 'Z'])
+        #Namespace(baz='Z', foo=True)
+
+
+        #if ()
 
 
