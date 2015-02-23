@@ -688,8 +688,8 @@ if __name__ == "__main__":
         parser_repl = subparsers.add_parser("repl", help="Starts a shell.")
         parser_repl.set_defaults(func=interpret)
 
-        parser_icon = subparsers.add_parser("icon", help="Extracts the icon from an app package.")
-        parser_icon.add_argument("file")
+        parser_icon = subparsers.add_parser("icon", help="Extracts the icon from an app package into the deploy folder.")
+        parser_icon.add_argument("file", help="apk file to extract from")
         parser_icon.add_argument("bamName", nargs="?")
         parser_icon.set_defaults(func=extractIconCMD)
 
