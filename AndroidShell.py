@@ -581,7 +581,7 @@ def deploy(args):
         fconfig = full_config[flavor]
 
         if ("debug_only" in fconfig and fconfig["debug_only"]):
-            flavored_files[flavor] = glob.glob("*/build/outputs/apk/%s-debug.apk" % flavor)
+            flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
         else:
 
             if len(glob.glob("*/build/outputs/apk")) > 0:
@@ -594,15 +594,15 @@ def deploy(args):
                     flavored_files[flavor] = glob.glob("build/outputs/apk/%s-release-unsigned.apk" % flavor)
     else:
 
-        if len(args.flavors) == 0: args.flavors = "*"
+        if len(args.flavors) == 0:
+            args.flavors = [flavorname]
 
         for flavor in args.flavors:
-            fconfig = full_config[flavor]
+            fconfig = get_flavor(full_config, flavor)
 
             if ("debug_only" in fconfig and fconfig["debug_only"]):
                 flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
             else:
-
                 if len(glob.glob("*/build/outputs/apk")) > 0:
                     flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release.apk" % flavor)
                     if len(flavored_files[flavor]) == 0:
@@ -616,7 +616,10 @@ def deploy(args):
     something_was_uploaded = False
     uploaded=[]
     mails=None
+    print(flavored_files)
     i = len(flavored_files)
+    if i == 0:
+        print(Color.RED + "Didn't found the apk's!"+Color.END)
     for fn, ff in flavored_files.items():
         if len(ff) > 1:
             print("??? " + fn + " " + str(ff))
@@ -634,6 +637,8 @@ def deploy(args):
                     mails=flavr["mailto"]
                 uploaded.append(bam_name)
                 something_was_uploaded = True
+        elif len(ff) == 0:
+            print(Color.RED + "No APKs found for flavor "+fn+"."+Color.END)
 
     if not something_was_uploaded:
         print(Color.RED + "Nothing was uploaded!"+Color.END)
