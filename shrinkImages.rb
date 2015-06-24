@@ -29,9 +29,16 @@ def executable_exists?(name)
   find_executable0 name
 end
 
+JPGTRAN_OK = executable_exists? "jpegtran"
+
+def jpegtran_cmd(file)
+  JPGTRAN_OK ? "jpegtran -copy none -optimize -perfect -outfile #{file} #{file}" : ""
+end
+
 execs = {:pngcrush => 'brew install pngcrush',
          :sips => 'xcode-select --install',
-         :jpegtran => 'Not sure how to install. Maybe xcode-select --install', }
+         #:jpegtran => 'Not sure how to install. Maybe xcode-select --install', 
+        }
 
 should_exit = false
 execs.each do |k, v|
@@ -53,7 +60,7 @@ Dir['6*'].each do |file|
 
   if jpg? sips
     print 'JPG...'
-    `jpegtran -copy none -optimize -perfect -outfile #{file} #{file}`
+    `#{jpegtran_cmd(file)}`
     puts "\b\b\b Optim."
     new_space += File.size file
     next
@@ -72,7 +79,7 @@ Dir['6*'].each do |file|
     end
 
     jpg_file = file+'.jpg'
-    `sips -s format jpeg -s formatOptions high #{file} --out #{jpg_file} && jpegtran -copy none -optimize -perfect -outfile #{jpg_file} #{jpg_file}`
+    `sips -s format jpeg -s formatOptions high #{file} --out #{jpg_file} && #{jpegtran_cmd(jpg_file)}`
     if File.size(file) < File.size(jpg_file)
       #PNG Smaller
       FileUtils.rm jpg_file
