@@ -16,6 +16,8 @@ from GradleParser import GradleParser
 from copy import deepcopy
 import time
 
+SELECTED_FLAVOR_FILE = ".adb.flavor"
+
 filename = ".adb"
 full_config = None
 config = None
@@ -65,7 +67,15 @@ def read_dot_adb(f):
     global flavorname
     j = json.load(f)
     full_config = j
-    if ("_f" in j):
+    
+    if os.path.exists(SELECTED_FLAVOR_FILE):
+        try:
+            flavorname = j["_f"]
+            flavor = get_flavor(j, flavorname)
+            return flavor
+        except:
+            print("Flavor '%s' doesn't exist!" % flavorname)        
+    elif ("_f" in j):
         try:
             flavorname = j["_f"]
             flavor = get_flavor(j, flavorname)
@@ -97,6 +107,8 @@ def load_config(args=None):
     if not pkg: pkg = config["package"]
     path = f.name
     dirname = os.path.dirname(path)
+    #selectedFlavorPath = os.path.join(dirname, SELECTED_FLAVOR_FILE)
+    #selectedFlavor = os.
 
 
 def load_all_config():
@@ -113,6 +125,8 @@ def load_all_config():
 
 
 def set_flavor(f, flavor, j):
+    with open(SELECTED_FLAVOR_FILE, "w+") as f2:
+        f2.write(flavor)
     j["_f"] = flavor
     json.dump(j, open(f.name, "w+"), indent=2, sort_keys=True)
 
@@ -239,6 +253,8 @@ def call(args, split=True):
 
 
 def edit(file, sublime=False):
+    if not os.path.exists(file):
+        call("touch "+file)
     if sublime:
         call("subl -W "+file)
     else:
@@ -581,7 +597,11 @@ def deploy(args):
         fconfig = full_config[flavor]
 
         if ("debug_only" in fconfig and fconfig["debug_only"]):
-            flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
+            x = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
+            if len(x) == 0:
+                x = glob.glob("*/build/outputs/apk/*%s-debug.apk" % flavor)
+            flavored_files[flavor] = x
+            
         else:
 
             if len(glob.glob("*/build/outputs/apk")) > 0:

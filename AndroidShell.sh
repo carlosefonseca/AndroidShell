@@ -113,3 +113,7 @@ incVersionCode () {
         perl -i -pe 's/(?<=versionCode=")(\d+)/$1+1/ge' $1
     fi
 }
+
+function adburl {
+    adb shell am start -a android.intent.action.VIEW -d "$1"
+}
