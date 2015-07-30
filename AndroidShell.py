@@ -571,7 +571,6 @@ def deploy(flavors, no_compile=False, no_mail=False):
 
     if "manifest" not in full_config["_default"]:
         print("What AndroidManifest defines the build number?")
-        import glob
         print("\n".join(glob.glob('*/src/*/AndroidManifest.xml')))
         t = input("> ").strip()
         f, j = load_all_config()

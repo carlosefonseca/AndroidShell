@@ -319,10 +319,10 @@ def describe_file(build_file, bam_name=None):
         raise Exception("Unknown file type")
     version = "%s (%s)" % (v_name, v_code)
     machine_name = shorten_bam_name(v_package) if not bam_name else bam_name
-    return machine_name, b_name, platf, version
+    return machine_name, b_name, platf, version, v_package, v_code, iconName
 
 def is_version_of_build_allowed(channel="dev", build_file=None, bam_name=None, verbose=False):
-    machine_name, b_name, platf, version = describe_file(build_file, bam_name)
+    machine_name, b_name, platf, version, v_package, v_code, iconName = describe_file(build_file, bam_name)
     return is_version_allowed(channel, machine_name, version, verbose)
 
 def is_version_allowed(channel="dev", machine_name=None, version=None, verbose=False):
@@ -353,7 +353,7 @@ def deploy(channel="dev", build_file=None, dry_run=False, release_notes=None, se
     # if data:
     # file = data.build if build_file is None else build_file
     
-    machine_name, b_name, platf, version = describe_file(build_file, bam_name)
+    machine_name, b_name, platf, version, v_package, v_code, iconName = describe_file(build_file, bam_name)
 
     print(indent("Deploying %s %s %s %s" % (b_name, version, channel, drytxt), True))
 
@@ -383,7 +383,7 @@ def deploy(channel="dev", build_file=None, dry_run=False, release_notes=None, se
     # print(indent(release_notes))
 
     # Destination for the build file
-    build_file_name = "%s-%s%s" % (machine_name, v_code, os.path.splitext(file)[1])
+    build_file_name = "%s-%s%s" % (machine_name, v_code, os.path.splitext(build_file)[1])
     dst = os.path.join(user_data.storage_folder, build_file_name)
     # dstIcon = os.path.join(user_data.storage_folder, machine_name+os.path.splitext(os.path.basename(iconName))[1])
 
@@ -400,11 +400,11 @@ def deploy(channel="dev", build_file=None, dry_run=False, release_notes=None, se
     if success:
         # Copy the built file
         print("")
-        print(indent("Copying %s -> %s %s" % (file, dst, drytxt), True))
+        print(indent("Copying %s -> %s %s" % (build_file, dst, drytxt), True))
         if not dry_run:
-            shutil.copy(file, dst)
-            extractIcon2(file, machine_name, iconName)
-            # extractFromZip(file, iconName, dstIcon)
+            shutil.copy(build_file, dst)
+            extractIcon2(build_file, machine_name, iconName)
+            # extractFromZip(build_file, iconName, dstIcon)
 
         if send_mail:
             print("")
