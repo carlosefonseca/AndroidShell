@@ -8,6 +8,7 @@ import json
 import argparse
 import subprocess
 import threading
+import re
 import glob
 import IPython
 import BewareAppManager
@@ -541,9 +542,45 @@ def slack(text, channel, username=None, icon_emoji=None):
         return False
 
 
+def check_android_manifest(maniffile, full_config, flavors, log_current_number=False):
+    manif = open(maniffile).read()
+    build_number = int(re.search('(?<=versionCode=")(\d+)', manif).group(1))
+    if log_current_number: print(build_number)
 
-def deploy(args):
+    for f in flavors:
+        c = full_config[f]
+        pck = c["bam_name"] if "bam_name" in c else shorten_bam_name(c["package"])
+        vrs = BewareAppManager.get_version("dev", pck)
+        build = int(re.search("\((\d+)\)", vrs).group(1))
+        if (build_number == build):
+            print(f+": Same build number ["+str(build_number)+" vs "+vrs+"].")
+            r = BewareAppManager.user_request("Increase? y/[n] ", "yn", "n")
+            if r.lower().startswith("y"):
+                subprocess.call(["perl","-i","-pe",'s/(?<=versionCode=\")(\d+)/$1+1/ge',maniffile])
+                return check_android_manifest(maniffile, full_config, flavors, True)
+            return False
+    return True
+
+
+def deploy_args(args):
     load_config(args)
+    return deploy(args.flavors, args.no_compile, args.no_mail)
+
+def deploy(flavors, no_compile=False, no_mail=False):
+    if not full_config: load_config()
+
+    if "manifest" not in full_config["_default"]:
+        print("What AndroidManifest defines the build number?")
+        import glob
+        print("\n".join(glob.glob('*/src/*/AndroidManifest.xml')))
+        t = input("> ").strip()
+        f, j = load_all_config()
+        j["_default"]["manifest"] = t
+        json.dump(j, open(f.name, "w+"), indent=2, sort_keys=True)
+        load_config()
+
+    maniffile = full_config["_default"]["manifest"]
+    if not check_android_manifest(maniffile, full_config, flavors): return
 
     gitout = gitstatus()
     if len(gitout):
@@ -561,15 +598,15 @@ def deploy(args):
     from multiprocessing.pool import ThreadPool
     pool = ThreadPool(processes=1)
 
-    if not args.no_compile:
-        if len(args.flavors) == 0: print("Building ALL flavors.")
+    if not no_compile:
+        if len(flavors) == 0: print("Building ALL flavors.")
 
         if ("debug_only" in config and config["debug_only"]):
             gradle_cmd = "%s/gradlew --offline --daemon assemble%sDebug" % (
-                dirname, "Debug assemble".join([x[0].upper()+x[1:] for x in args.flavors]))
+                dirname, "Debug assemble".join([x[0].upper()+x[1:] for x in flavors]))
         else:
             gradle_cmd = "%s/gradlew --offline --daemon assemble%sRelease" % (
-                dirname, "Release assemble".join([x[0].upper()+x[1:] for x in args.flavors]))
+                dirname, "Release assemble".join([x[0].upper()+x[1:] for x in flavors]))
 
         async_result = pool.apply_async(call, (gradle_cmd,))
 
@@ -586,7 +623,7 @@ def deploy(args):
 
     edit(release_notes_file)
 
-    if not args.no_compile:
+    if not no_compile:
         if async_result.get() != 0:
             print("Build failed.")
             return 1
@@ -614,8 +651,8 @@ def deploy(args):
                     flavored_files[flavor] = glob.glob("build/outputs/apk/%s-release-unsigned.apk" % flavor)
     else:
 
-        if len(args.flavors) == 0:
-            args.flavors = [flavorname]
+        if len(flavors) == 0:
+            flavors = [flavorname]
 
         for flavor in args.flavors:
             fconfig = get_flavor(full_config, flavor)
@@ -665,7 +702,7 @@ def deploy(args):
 
 
     print()
-    if args.no_mail or not mails:
+    if no_mail or not mails:
         print(Color.BOLD + "Skipping emails" + Color.END)
     else:
         BewareAppManager.mail_multiple(to=mails, apps=uploaded, dry_run=args.dry_run)
@@ -837,7 +874,7 @@ if __name__ == "__main__":
     parser_deploy.add_argument("flavors", nargs="*")
     parser_deploy.add_argument("--no-compile", "-nc", action='store_true')
     parser_deploy.add_argument("--no-mail", "-nm", action='store_true')
-    parser_deploy.set_defaults(func=deploy)
+    parser_deploy.set_defaults(func=deploy_args)
 
     parser_publish = subparsers.add_parser('publish', help="Publish to Google Play and post to Slack.")
     parser_publish.add_argument("flavors", nargs="*")

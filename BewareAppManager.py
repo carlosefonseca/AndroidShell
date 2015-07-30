@@ -173,8 +173,6 @@ def request(endpoint, params=None, log=False, dry_run=False, log_errors=True, do
         except:
             t = req.text
     if j:
-        print("J")
-        print(j)
         if log or (log_errors and req.status_code >= 400):
             try:
                 json_dumps = json.dumps(j, indent=2, ensure_ascii=False)
@@ -308,15 +306,7 @@ def indent(txt, arrow=False):
         space = "    "
     return space + re.sub("\n", "\n" + space, txt)
 
-
-def deploy(channel="dev", build_file=None, dry_run=False, release_notes=None, send_mail=None, post_slack=None, post_slack_release_notes=False, bam_name=None, auto_create=False):
-    if not user_data:
-        load_user_data()
-    drytxt = "[dry-run]" if dry_run else ""
-    # if dry_run: print(indent("<deploy dry-run>"))
-    # data = get_data()
-    # if data:
-    # file = data.build if build_file is None else build_file
+def describe_file(build_file, bam_name=None):
     file = build_file
     platf = None
     if file[-3:] == "apk":
@@ -328,6 +318,43 @@ def deploy(channel="dev", build_file=None, dry_run=False, release_notes=None, se
     else:
         raise Exception("Unknown file type")
     version = "%s (%s)" % (v_name, v_code)
+    machine_name = shorten_bam_name(v_package) if not bam_name else bam_name
+    return machine_name, b_name, platf, version
+
+def is_version_of_build_allowed(channel="dev", build_file=None, bam_name=None, verbose=False):
+    machine_name, b_name, platf, version = describe_file(build_file, bam_name)
+    return is_version_allowed(channel, machine_name, version, verbose)
+
+def is_version_allowed(channel="dev", machine_name=None, version=None, verbose=False):
+    success, app = request(endpoint=machine_name, log_errors=False, do_indent=True, log=False)
+    if success:
+        if verbose: print("App version: "+version)
+        online_version = app["latest_releases"][channel]["version"]
+        if verbose: print("BAM version: "+online_version)
+        return version != online_version
+    else:
+        print("App doesn't exist")
+        return True
+
+def get_version(channel="dev", machine_name=None):
+    success, app = request(endpoint=machine_name, log_errors=True, do_indent=True, log=False)
+    if success:
+        return app["latest_releases"][channel]["version"]
+    else:
+        return None
+
+
+def deploy(channel="dev", build_file=None, dry_run=False, release_notes=None, send_mail=None, post_slack=None, post_slack_release_notes=False, bam_name=None, auto_create=False):
+    if not user_data:
+        load_user_data()
+    drytxt = "[dry-run]" if dry_run else ""
+    # if dry_run: print(indent("<deploy dry-run>"))
+    # data = get_data()
+    # if data:
+    # file = data.build if build_file is None else build_file
+    
+    machine_name, b_name, platf, version = describe_file(build_file, bam_name)
+
     print(indent("Deploying %s %s %s %s" % (b_name, version, channel, drytxt), True))
 
     # print("BAM NAME:"+str(bam_name))
