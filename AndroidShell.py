@@ -595,6 +595,9 @@ def deploy(flavors, no_compile=False, no_mail=False):
             call(["stree"])
             BewareAppManager.user_request("Continue? ")
     
+    if not os.path.exists(release_notes_file):
+        open(release_notes_file, 'w').close() 
+
     from multiprocessing.pool import ThreadPool
     pool = ThreadPool(processes=1)
 
