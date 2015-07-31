@@ -60,11 +60,14 @@ def get_bam_file():
 
 def create_user_data():
     u = UserBam()
+    u.appmanager = user_request("URL of the App Manager (eg: http://example.com/api/v1/): ")
     u.storage_folder = user_request("Path to the folder that will hold your apps: ")
     u.base_url = user_request("Public URL for the folder: ")
     email_name = user_request("Sender name for sending emails: ")
     email = user_request("Sender email: ")
     u.frm = "%s <%s>" % (email_name, email)
+    if not u.appmanager.endswith("/"):
+        u.appmanager += "/"
     if not u.base_url.endswith("/"):
         u.base_url += "/"
     u.slack_url = user_request("Slack incomming web hook url (https://my.slack.com/services): ")
@@ -90,6 +93,7 @@ def get_user_data():
 
 class UserBam:
     def __init__(self, dict=None):
+        self.appmanager = None
         self.storage_folder = None
         self.base_url = None
         self.frm = None
@@ -139,9 +143,6 @@ def user_request(prompt, options=None, default=None):
 ########################################################################################################################
 #       network
 ########################################################################################################################
-base_url = 'http://bwappmanager.herokuapp.com/api/v1/'
-# base_url = 'http://0.0.0.0:5000/api/v1/'
-
 
 def request(endpoint, params=None, log=False, dry_run=False, log_errors=True, do_indent=False):
     # print("-> " + endpoint)
@@ -155,7 +156,7 @@ def request(endpoint, params=None, log=False, dry_run=False, log_errors=True, do
     if endpoint.startswith("http"):
         url = endpoint
     else:
-        url = base_url + endpoint
+        url = user_data.appmanager + endpoint
 
     if log: print(indent(url) if do_indent else url)
     j = t = None
@@ -343,6 +344,11 @@ def get_version(channel="dev", machine_name=None):
     else:
         return None
 
+def get_app_args(args):
+    print(json.dumps(get_app(args.app)[1], indent=2, ensure_ascii=False))
+
+def get_app(bam_name):
+    return request(endpoint=bam_name)
 
 def deploy(channel="dev", build_file=None, dry_run=False, release_notes=None, send_mail=None, post_slack=None, post_slack_release_notes=False, bam_name=None, auto_create=False):
     if not user_data:
@@ -720,9 +726,13 @@ if __name__ == "__main__":
         parser_icon.add_argument("bamName", nargs="?")
         parser_icon.set_defaults(func=extractIconCMD)
 
+        parser_view_app = subparsers.add_parser("app", help="View an app on the server.")
+        parser_view_app.add_argument("app")
+        parser_view_app.set_defaults(func=get_app_args)
+
         args = parser.parse_args()
-        print(args)
-        args.func(args)
+        if "func" in args:
+            args.func(args)
 
         # parse some argument lists
         #Namespace(bar=12, foo=False)
