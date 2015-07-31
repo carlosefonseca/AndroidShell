@@ -551,20 +551,24 @@ def check_android_manifest(maniffile, full_config, flavors, log_current_number=F
         c = full_config[f]
         pck = c["bam_name"] if "bam_name" in c else shorten_bam_name(c["package"])
         vrs = BewareAppManager.get_version("dev", pck)
-        build = int(re.search("\((\d+)\)", vrs).group(1))
-        if (build_number == build):
-            print(f+": Same build number ["+str(build_number)+" vs "+vrs+"].")
-            r = BewareAppManager.user_request("Increase? y/[n] ", "yn", "n")
-            if r.lower().startswith("y"):
-                subprocess.call(["perl","-i","-pe",'s/(?<=versionCode=\")(\d+)/$1+1/ge',maniffile])
-                return check_android_manifest(maniffile, full_config, flavors, True)
-            return False
+        if vrs:
+            build = int(re.search("\((\d+)\)", vrs).group(1))
+            if (build_number == build):
+                print(f+": Same build number ["+str(build_number)+" vs "+vrs+"].")
+                r = BewareAppManager.user_request("Increase? y/[n] ", "yn", "n")
+                if r.lower().startswith("y"):
+                    subprocess.call(["perl","-i","-pe",'s/(?<=versionCode=\")(\d+)/$1+1/ge',maniffile])
+                    return check_android_manifest(maniffile, full_config, flavors, True)
+                return False
     return True
 
 
 def deploy_args(args):
     load_config(args)
-    return deploy(args.flavors, args.no_compile, args.no_mail)
+    if ("release_manager" in full_config["_default"] and full_config["_default"]["release_manager"] == None):
+        return release(args.flavors, args.no_compile)
+    else:
+        return deploy(args.flavors, args.no_compile, args.no_mail)
 
 def deploy(flavors, no_compile=False, no_mail=False):
     if not full_config: load_config()
@@ -733,6 +737,82 @@ def uploadBAM3(f, flavor, release_notes=None, post_slack_release_notes=False, dr
                                    post_slack_release_notes=post_slack_release_notes,
                                    bam_name=name,
                                    auto_create=True)
+
+def release(flavors, no_compile=False):
+    if not full_config: load_config()
+
+    gitout = gitstatus()
+    if len(gitout):
+        print("⚠️  Git: " + gitout.strip())
+        r = BewareAppManager.user_request("Continue? [Yes]/No/Tower/Sourcetree ", "ynts", "y")
+        if r == "n":
+            return
+        elif r == "t":
+            call(["gittower", "."])
+            BewareAppManager.user_request("Continue? ")
+        elif r == "s":
+            call(["stree"])
+            BewareAppManager.user_request("Continue? ")
+    
+    if not no_compile:
+        if len(flavors) == 0: print("Building ALL flavors.")
+
+        if ("debug_only" in config and config["debug_only"]):
+            gradle_cmd = "%s/gradlew --offline --daemon assemble%sDebug" % (
+                dirname, "Debug assemble".join([x[0].upper()+x[1:] for x in flavors]))
+        else:
+            gradle_cmd = "%s/gradlew --offline --daemon assemble%sRelease" % (
+                dirname, "Release assemble".join([x[0].upper()+x[1:] for x in flavors]))
+
+        if call(gradle_cmd) != 0:
+            print("Build failed.")
+            return 1
+
+    flavored_files = {}
+    if "singleflavor" in full_config:
+        flavor = full_config["singleflavor"]
+        fconfig = full_config[flavor]
+
+        if ("debug_only" in fconfig and fconfig["debug_only"]):
+            x = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
+            if len(x) == 0:
+                x = glob.glob("*/build/outputs/apk/*%s-debug.apk" % flavor)
+            flavored_files[flavor] = x
+            
+        else:
+
+            if len(glob.glob("*/build/outputs/apk")) > 0:
+                flavored_files[flavor] = glob.glob("*/build/outputs/apk/%s-release.apk" % flavor)
+                if len(flavored_files[flavor]) == 0:
+                    flavored_files[flavor] = glob.glob("*/build/outputs/apk/%s-release-unsigned.apk" % flavor)
+            elif len(glob.glob("build/outputs/apk")) > 0:
+                flavored_files[flavor] = glob.glob("build/outputs/apk/%s-release.apk" % flavor)
+                if len(flavored_files[flavor]) == 0:
+                    flavored_files[flavor] = glob.glob("build/outputs/apk/%s-release-unsigned.apk" % flavor)
+    else:
+
+        if len(flavors) == 0:
+            flavors = [flavorname]
+
+        for flavor in args.flavors:
+            fconfig = get_flavor(full_config, flavor)
+
+            if ("debug_only" in fconfig and fconfig["debug_only"]):
+                flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
+            else:
+                if len(glob.glob("*/build/outputs/apk")) > 0:
+                    flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release.apk" % flavor)
+                    if len(flavored_files[flavor]) == 0:
+                        flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
+                elif len(glob.glob("build/outputs/apk")) > 0:
+                    flavored_files[flavor] = glob.glob("build/outputs/apk/*-%s-release.apk" % flavor)
+                    if len(flavored_files[flavor]) == 0:
+                        flavored_files[flavor] = glob.glob("build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
+
+    for key, value in flavored_files.items():
+        print(key+":")
+        print("\n".join([os.path.abspath(p) for p in value]))
+
 
 
 def pull_sdcard_files(args):

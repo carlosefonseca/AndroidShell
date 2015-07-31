@@ -337,7 +337,7 @@ def is_version_allowed(channel="dev", machine_name=None, version=None, verbose=F
         return True
 
 def get_version(channel="dev", machine_name=None):
-    success, app = request(endpoint=machine_name, log_errors=True, do_indent=True, log=False)
+    success, app = request(endpoint=machine_name, log_errors=False, do_indent=True, log=False)
     if success:
         return app["latest_releases"][channel]["version"]
     else:
