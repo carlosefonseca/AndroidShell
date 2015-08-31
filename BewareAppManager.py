@@ -145,6 +145,8 @@ def user_request(prompt, options=None, default=None):
 ########################################################################################################################
 
 def request(endpoint, params=None, log=False, dry_run=False, log_errors=True, do_indent=False):
+    if not user_data:
+        load_user_data()
     # print("-> " + endpoint)
     if dry_run:
         print("%sWould request: %s" % ((indent("") if do_indent else ""), endpoint))
