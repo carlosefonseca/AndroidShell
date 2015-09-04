@@ -17,7 +17,13 @@ setandroid() {
         number=1
     else
         # if more than one device, ask the user for which one
-        read -p "Device: " number
+        if [ -n "$ZSH_VERSION" ]; then
+            read "?Device: " number
+        elif [ -n "$BASH_VERSION" ]; then
+            read -p "Device: " number
+        else
+            read number
+        fi
     fi
 
     # if is number and within range
