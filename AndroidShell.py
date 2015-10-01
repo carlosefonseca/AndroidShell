@@ -619,7 +619,7 @@ def deploy(flavors, no_compile=False, no_mail=False):
     redmine_project = config["redmine"] if "redmine" in config else None
 
     if redmine_project is not None:
-        r = BewareAppManager.user_request("Fetch Release Notes from Redmine? Y/[N] ", "yn", "n")
+        r = BewareAppManager.user_request("Fetch Release Notes from Redmine/%s? Y/[N] " % redmine_project, "yn", "n")
         if r == "y":
 
             import redmine_release_notes
