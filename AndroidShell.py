@@ -612,10 +612,10 @@ def deploy(flavors, no_compile=False, no_mail=False):
         if len(flavors) == 0: print("Building ALL flavors.")
 
         if ("debug_only" in config and config["debug_only"]):
-            gradle_cmd = "%s/gradlew --offline --daemon assemble%sDebug" % (
+            gradle_cmd = "%s/gradlew --daemon assemble%sDebug" % (
                 dirname, "Debug assemble".join([x[0].upper()+x[1:] for x in flavors]))
         else:
-            gradle_cmd = "%s/gradlew --offline --daemon assemble%sRelease" % (
+            gradle_cmd = "%s/gradlew --daemon assemble%sRelease" % (
                 dirname, "Release assemble".join([x[0].upper()+x[1:] for x in flavors]))
 
         async_result = pool.apply_async(call, (gradle_cmd,))
