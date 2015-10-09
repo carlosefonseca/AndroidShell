@@ -240,6 +240,16 @@ def flavor(args):
         else:
             print("Flavor '%s' doesn't exist!" % flavor)
 
+def update():
+    fn, j = load_all_config()
+    gradle = {x[0]:{"package":x[1]["package"]} for x in GradleParser(folder="fbooking").flavors().items()}
+    for f in gradle:
+        if f not in j:
+            j[f] = gradle[f]
+        else:
+            j[f]["package"] = gradle[f]["package"]
+    json.dump(j, open(fn.name, "w+"), indent=2, sort_keys=True)
+
 
 def call(args, split=True):
     if split:
