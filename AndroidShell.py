@@ -643,6 +643,8 @@ def deploy(flavors, no_compile=False, no_mail=False):
             x = glob.glob("*/build/outputs/apk/*-%s-debug.apk" % flavor)
             if len(x) == 0:
                 x = glob.glob("*/build/outputs/apk/*%s-debug.apk" % flavor)
+                if len(x) == 0:
+                    x = glob.glob("*/build/outputs/apk/*%s-debug.apk" % flavor.title())
             flavored_files[flavor] = x
             
         else:
