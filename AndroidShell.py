@@ -670,6 +670,8 @@ def deploy(flavors, no_compile=False, no_mail=False):
             else:
                 if len(glob.glob("*/build/outputs/apk")) > 0:
                     flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release.apk" % flavor)
+                    if len(flavored_files[flavor]) == 0 and "apkname" in fconfig:
+                        flavored_files[flavor] = glob.glob("*/build/outputs/apk/%s" % fconfig["apkname"])
                     if len(flavored_files[flavor]) == 0:
                         flavored_files[flavor] = glob.glob("*/build/outputs/apk/*-%s-release-unsigned.apk" % flavor)
                 elif len(glob.glob("build/outputs/apk")) > 0:
