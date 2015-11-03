@@ -576,6 +576,7 @@ def deploy(flavors, no_compile=False, no_mail=False):
     if "manifest" not in full_config["_default"]:
         print("What AndroidManifest defines the build number?")
         print("\n".join(glob.glob('*/src/*/AndroidManifest.xml')))
+        print("\n".join(glob.glob('src/*/AndroidManifest.xml')))
         t = input("> ").strip()
         f, j = load_all_config()
         j["_default"]["manifest"] = t
@@ -583,7 +584,10 @@ def deploy(flavors, no_compile=False, no_mail=False):
         load_config()
 
     maniffile = full_config["_default"]["manifest"]
-    if not check_android_manifest(maniffile, full_config, flavors): return
+    try:
+        if not check_android_manifest(maniffile, full_config, flavors): return
+    except Exception as e:
+        print(e)
 
     gitout = gitstatus()
     if len(gitout):
