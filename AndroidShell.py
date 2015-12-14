@@ -475,13 +475,17 @@ def request_user(prompt, options=None, default=None):
             t = default
     return t
 
-def get_flavor(json, name):
-    if "_default" in json:
-        f = deepcopy(json["_default"])
-        f.update(json[name])
-        return f
+def get_flavor(j, name):
+    if "_default" in j:
+        f = deepcopy(j["_default"])
+        try:
+            f.update(j[name])
+            return f
+        except Exception as e:
+            print("\nKeys: "+str([k for k in j.keys() if not k.startswith("_")]))
+            raise e
     else:
-        return json[name]
+        return j[name]
 
 def publish(args):
     load_config(args)
