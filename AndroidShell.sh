@@ -58,9 +58,9 @@ function downloadAndroidFile {
                 echo -e $A | xargs -0 -P 1 -I {} echo -e {}
             else
                 if [[ $2 -ge 2 ]]; then
-                    A=$(adb shell ls $D | grep "14*" |  tail -r -n $2 | tail -n 1 | tr '\r' '\0')
+
                 else
-                    A=$(adb shell ls $D | grep "14*" |  tail -n 1 | tr '\r' '\0')
+
                 fi
                 echo $A
                 adb pull $D/$A
@@ -89,7 +89,11 @@ function adball {
 # screencapture current device
 function adbscreen {
     A="screen-$(ceftimestamp)"
-    adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png
+    if (( $(adb shell getprop ro.build.version.sdk|tr -d '\r') > 23 )); then
+        adb shell screencap -p  > $A.png
+    else
+        adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png
+    fi
 }
 
 # screencapture current device and view file
@@ -105,7 +109,12 @@ function adbscreenall {
 
 adbscreendesk () {
     A="screen-$(ceftimestamp)"
-    adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png && mv $A.png ~/Desktop/
+    if (( $(adb shell getprop ro.build.version.sdk|tr -d '\r') > 23 )); then
+        adb shell screencap -p  > $A.png
+    else
+        adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png
+    fi
+    ds $A.png
 }
 
 incVersionCode () {
@@ -121,5 +130,15 @@ incVersionCode () {
 }
 
 function adburl {
-    adb shell am start -a android.intent.action.VIEW -d "$1"
+    adb shell am start -a android.intent.action.VIEW -d "$(perl -p -e 's/([&;])/\\\1/g' <<< $1)"
+}
+
+function adbdb {
+    rm -f $2
+    adb shell run-as $1 cp databases/$2 /sdcard
+    adb shell run-as $1 cp databases/$2-journal /sdcard
+    adb pull /sdcard/$2
+    adb pull /sdcard/$2-journal
+    sqlite3 $2 vacuum
+    open $2
 }
