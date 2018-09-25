@@ -71,18 +71,11 @@ def read_dot_adb(f):
     
     if os.path.exists(SELECTED_FLAVOR_FILE):
         try:
-            flavorname = j["_f"]
+            flavorname = get_selected_flavor()
             flavor = get_flavor(j, flavorname)
             return flavor
         except:
             print("Flavor '%s' doesn't exist!" % flavorname)        
-    elif ("_f" in j):
-        try:
-            flavorname = j["_f"]
-            flavor = get_flavor(j, flavorname)
-            return flavor
-        except:
-            print("Flavor '%s' doesn't exist!" % flavorname)
     else:
         if (len(j) > 1):
             print("Select a flavor")
@@ -125,11 +118,15 @@ def load_all_config():
     return f, j
 
 
+def get_selected_flavor():
+    if os.path.exists(SELECTED_FLAVOR_FILE):
+        with open(SELECTED_FLAVOR_FILE, "r") as f:
+            return f.read()
+    return None
+
 def set_flavor(f, flavor, j):
     with open(SELECTED_FLAVOR_FILE, "w+") as f2:
         f2.write(flavor)
-    j["_f"] = flavor
-    json.dump(j, open(f.name, "w+"), indent=2, sort_keys=True)
 
 
 """
@@ -179,9 +176,6 @@ def flavor(args):
 
     if "_gradle" in j:
         flavors = GradleParser(folder=os.path.join(os.path.dirname(f.name), j["_gradle"])).flavors()
-        #print(flavors)
-        # for ff in flavors:
-            # print(j["_f"] +"   >   "+ (",    ".join([k+": "+v for k,v in ff.items()])))
 
         if args.dump:
             print(json.dumps(flavors, indent=2))
@@ -194,22 +188,25 @@ def flavor(args):
                 set_flavor(f, name, j)
                 return
 
-            if "_f" not in j:
+            if not get_selected_flavor():
                 if len(flavors) == 1:
                     set_flavor(f, flavors.keys()[0], j)
+                    return
                 else:
                     print("No flavor set. Choose from these:")
                     name, _ = choose_gradle_flavor(flavors)
                     set_flavor(f, name, j)
                     return
 
-            flavor = flavors[j["_f"]]
-            print(j["_f"] +"   >   "+ (",    ".join([k+": "+v for k,v in flavor.items()])))
+            fn = get_selected_flavor()
+            flavor = flavors[fn]
+            print(fn +"   >   "+ (",    ".join([k+": "+v for k,v in flavor.items()])))
 
         elif flavor in j:
             set_flavor(f, flavor, j)
             print("Selected flavor: " + flavor)
         else:
+            update()
             keys = list(flavors.keys())
             for k in keys:
                 if k.startswith(flavor):
@@ -224,14 +221,15 @@ def flavor(args):
 
         flavor = args.name
         if not flavor:
-            if "_f" not in j:
+            if not get_selected_flavor():
                 if len(j.keys()) == 1:
                     set_flavor(f, list(j.keys())[0], j)
                 else:
                     print("No flavor set. Choose from these: %s" % ", ".join(j.keys()))
                     return
-            # print("Current flavor: %s  on file: %s" % (j["_f"], f.name))
-            print("Current flavor: %s   [ %s ]" % (j["_f"], ", ".join([k for k in j.keys() if not k.startswith("_") and k != j["_f"]])))
+
+            fn = get_selected_flavor()
+            print("Current flavor: %s   [ %s ]" % (fn, ", ".join([k for k in j.keys() if not k.startswith("_") and k != fn])))
             return
 
         if flavor in j:
@@ -242,7 +240,8 @@ def flavor(args):
 
 def update():
     fn, j = load_all_config()
-    gradle = {x[0]:{"package":x[1]["package"]} for x in GradleParser(folder="fbooking").flavors().items()}
+    folder = request_user("Folder for build.gradle? ")
+    gradle = {x[0]:{"package":x[1]["package"]} for x in GradleParser(folder=folder).flavors().items()}
     for f in gradle:
         if f not in j:
             j[f] = gradle[f]
@@ -892,7 +891,7 @@ def cd_assets_folder(args):
 
 def interpret(args):
     load_config(args)
-    print("pkg: " + pkg)
+    # print("pkg: " + pkg)
     import IPython
 
     IPython.embed()

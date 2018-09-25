@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import os
 import json
 #import argparse
@@ -26,7 +27,9 @@ class GradleParser:
 
     def flavors(self):
         txt = open(self.path).read()
+        # print(txt)
         match = re.search("productFlavors\s*{\s+((?:(?:[^{}]*)+{(?:[^{}]+)})+)\s*(?://.*)?\s*}", txt)
+        # print(match)
         block = match.group(1)
         block = block.replace("applicationId", "package")
 
@@ -60,5 +63,5 @@ class GradleParser:
 #
 
 if __name__ == "__main__":
-    g = GradleParser(folder="/Users/carlos/Beware/WDAAProject/WDAA")
-    print(g.flavors())
+    g = GradleParser(folder=sys.argv[1])
+    print(g.flavors()[sys.argv[2]])
