@@ -115,6 +115,8 @@ adbscreendesk () {
         adb shell screencap -p | perl -pe 's/\x0D\x0A/\x0A/g' > $A.png
     fi
     ds $A.png
+    sleep 1
+    rm $A.png
 }
 
 incVersionCode () {
